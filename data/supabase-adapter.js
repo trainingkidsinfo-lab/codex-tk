@@ -1,6 +1,7 @@
 import { assertSupabaseConfig } from "./app-config.js";
 
 const SUPABASE_JS_URL = "https://esm.sh/@supabase/supabase-js@2";
+const TEST_MAGIC_LINK_REDIRECT = "http://127.0.0.1:4181/?mode=test";
 const TEMPLATE_BY_CODE = {
   activity_contract: "tk-service-terms",
   image_authorization: "tk-image-rights",
@@ -20,7 +21,6 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
   let supabase;
   let authSubscription;
   let otpRequestInFlight = false;
-  let otpVerifyInFlight = false;
 
   function testState(patch = {}) {
     return {
@@ -37,12 +37,13 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     const { createClient } = await import(SUPABASE_JS_URL);
     supabase = createClient(config.supabaseUrl, config.supabaseAnonKey, {
       auth: {
+        flowType: "pkce",
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: false,
       },
     });
-    cleanLegacyAuthUrl();
+    await processAuthReturn();
     await refreshSessionAndState();
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (!["SIGNED_IN", "SIGNED_OUT", "TOKEN_REFRESHED", "USER_UPDATED"].includes(event)) return;
@@ -61,14 +62,23 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     state = testState({ connectionStatus: "error", connectionError: friendlyError(error) });
   }
 
-  function cleanLegacyAuthUrl() {
+  async function processAuthReturn() {
     const url = new URL(window.location.href);
-    const legacyParams = ["code", "error", "error_code", "error_description", "token", "type"];
-    const hasLegacyAuthData = legacyParams.some((key) => url.searchParams.has(key)) || Boolean(url.hash);
-    if (!hasLegacyAuthData) return;
-    legacyParams.forEach((key) => url.searchParams.delete(key));
-    url.hash = "";
-    window.history.replaceState({}, document.title, `${url.pathname}${url.search}`);
+    const code = url.searchParams.get("code");
+    const authError = url.searchParams.get("error_description") || url.searchParams.get("error");
+    const hasAuthData = code || authError || Boolean(url.hash);
+    if (!hasAuthData) return;
+    try {
+      if (authError) throw new Error(decodeURIComponent(authError.replace(/\+/g, " ")));
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) throw error;
+      }
+    } finally {
+      ["code", "error", "error_code", "error_description", "token", "type"].forEach((key) => url.searchParams.delete(key));
+      url.hash = "";
+      window.history.replaceState({}, document.title, `${url.pathname}${url.search}`);
+    }
   }
 
   async function refreshSessionAndState() {
@@ -352,35 +362,21 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
       commit();
     },
     save() {},
-    async requestOtp(email) {
+    async requestLoginLink(email) {
       if (!supabase) throw new Error(state.connectionError || "Supabase no esta disponible.");
       if (otpRequestInFlight) return;
       otpRequestInFlight = true;
       try {
         const { error } = await supabase.auth.signInWithOtp({
           email: email.trim().toLowerCase(),
-          options: { shouldCreateUser: false },
+          options: {
+            shouldCreateUser: false,
+            emailRedirectTo: TEST_MAGIC_LINK_REDIRECT,
+          },
         });
         if (error) throw error;
       } finally {
         otpRequestInFlight = false;
-      }
-    },
-    async verifyOtp(email, token) {
-      if (!supabase) throw new Error(state.connectionError || "Supabase no esta disponible.");
-      if (otpVerifyInFlight) return;
-      otpVerifyInFlight = true;
-      try {
-        const { error } = await supabase.auth.verifyOtp({
-          email: email.trim().toLowerCase(),
-          token: token.replace(/\s+/g, ""),
-          type: "email",
-        });
-        if (error) throw error;
-        await refreshSessionAndState();
-        commit();
-      } finally {
-        otpVerifyInFlight = false;
       }
     },
     async logout() {

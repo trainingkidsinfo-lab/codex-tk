@@ -1,8 +1,12 @@
-# Fase C.1 - Plantilla OTP de Supabase
+# Mejora futura - Plantilla OTP de Supabase
 
-Esta configuracion es manual y solo afecta al proyecto Supabase de pruebas.
+Esta configuracion no debe aplicarse todavia. Mientras Supabase mantenga bloqueada la edicion de la plantilla sin SMTP, la aplicacion utiliza temporalmente el magic link predeterminado.
+
+Antes de produccion se configurara un dominio, SMTP corporativo y esta plantilla basada en `{{ .Token }}`. No deben solicitarse ni guardarse credenciales SMTP durante la fase actual.
 
 ## Donde configurarla
+
+Cuando exista SMTP corporativo:
 
 1. Abrir `Supabase -> Authentication -> Email Templates`.
 2. Entrar en `Magic Link / OTP`.

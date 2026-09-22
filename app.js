@@ -13,8 +13,8 @@ import {
 } from "./data/mock-data.js?v=13";
 import { loadAppConfig } from "./data/app-config.js";
 import { createLocalDataAdapter } from "./data/local-adapter.js?v=13";
-import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=1";
-import { renderAuth, renderLoading } from "./areas/access.js?v=13";
+import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=2";
+import { renderAuth, renderLoading } from "./areas/access.js?v=14";
 import { renderAdmin } from "./areas/admin.js?v=12";
 import { renderDesign } from "./areas/design.js?v=12";
 import { renderDocuments } from "./areas/documents.js?v=13";
@@ -76,25 +76,7 @@ async function login() {
   const email = document.querySelector("#email").value.trim();
   const code = (document.querySelector("#code")?.value || "").replace(/\s+/g, "");
   if (!email) return toast("Introduce un correo electrónico.");
-  if (appConfig.isSupabaseTest) {
-    if (!code) return requestLoginCode(email);
-    if (getState().authVerifyInFlight) return;
-    adapter.mutate((state) => {
-      state.authVerifyInFlight = true;
-      state.pendingOtpEmail = email;
-      state.authError = "";
-    });
-    try {
-      await adapter.verifyOtp(email, code);
-    } catch (error) {
-      adapter.setState({
-        authVerifyInFlight: false,
-        pendingOtpEmail: email,
-        authError: translateAuthError(error, "verify"),
-      });
-    }
-    return;
-  }
+  if (appConfig.isSupabaseTest) return requestLoginLink(email);
   if (code !== TEST_CODE) return toast("Codigo de prueba incorrecto. Usa 123456.");
 
   adapter.mutate((state) => {
@@ -117,11 +99,11 @@ async function login() {
   }, 450);
 }
 
-async function requestLoginCode(email) {
+async function requestLoginLink(email) {
   const normalizedEmail = email.trim().toLowerCase();
   if (!normalizedEmail || getState().authRequestInFlight) return;
   const resendRemaining = secondsUntilResend(getState());
-  if (getState().pendingOtpEmail && resendRemaining > 0) return;
+  if (getState().pendingLinkEmail && resendRemaining > 0) return;
   adapter.mutate((state) => {
     state.authRequestInFlight = true;
     state.authEmailDraft = normalizedEmail;
@@ -129,24 +111,24 @@ async function requestLoginCode(email) {
     state.authError = "";
   });
   try {
-    await adapter.requestOtp(normalizedEmail);
+    await adapter.requestLoginLink(normalizedEmail);
     const resendAvailableAt = Date.now() + 60_000;
     adapter.setState({
       authRequestInFlight: false,
-      pendingOtpEmail: normalizedEmail,
+      pendingLinkEmail: normalizedEmail,
       authEmailDraft: normalizedEmail,
       resendAvailableAt,
       authError: "",
-      authNotice: "Código enviado. Revisa tu correo electrónico.",
+      authNotice: "Enlace enviado. Revisa tu correo electrónico.",
     });
     startResendCountdown();
   } catch (error) {
-    console.warn("Supabase OTP request failed:", error?.message || error);
+    console.warn("Supabase login link request failed:", error?.message || error);
     adapter.setState({
       authRequestInFlight: false,
       authEmailDraft: normalizedEmail,
       authNotice: "",
-      authError: translateAuthError(error, "request"),
+      authError: translateAuthError(error),
     });
   }
 }
@@ -158,7 +140,7 @@ function secondsUntilResend(state = getState()) {
 function startResendCountdown() {
   window.clearInterval(resendCountdownTimer);
   resendCountdownTimer = window.setInterval(() => {
-    if (!getState().pendingOtpEmail || secondsUntilResend() <= 0) {
+    if (!getState().pendingLinkEmail || secondsUntilResend() <= 0) {
       window.clearInterval(resendCountdownTimer);
       resendCountdownTimer = null;
       adapter.setState({ authCountdownTick: Date.now() });
@@ -172,30 +154,26 @@ function changeLoginEmail() {
   window.clearInterval(resendCountdownTimer);
   resendCountdownTimer = null;
   adapter.setState({
-    pendingOtpEmail: "",
+    pendingLinkEmail: "",
     authEmailDraft: "",
     resendAvailableAt: 0,
     authNotice: "",
     authError: "",
     authRequestInFlight: false,
-    authVerifyInFlight: false,
   });
 }
 
-function translateAuthError(error, action) {
+function translateAuthError(error) {
   const message = String(error?.message || "").toLowerCase();
   const code = String(error?.code || error?.status || "").toLowerCase();
-  if (message.includes("email rate limit exceeded") || code.includes("over_email_send_rate_limit") || (action === "request" && code === "429")) {
-    return "Se ha alcanzado temporalmente el límite de correos de acceso. Espera unos minutos antes de solicitar otro código.";
+  if (message.includes("email rate limit exceeded") || code.includes("over_email_send_rate_limit") || code === "429") {
+    return "Se ha alcanzado temporalmente el límite de correos de acceso. Espera unos minutos antes de solicitar otro enlace.";
   }
   if (message.includes("invalid email")) {
     return "El formato del correo no es válido. Revísalo e inténtalo de nuevo.";
   }
-  if (message.includes("token has expired") || message.includes("otp expired") || message.includes("expired")) {
-    return "El código ha caducado. Solicita uno nuevo.";
-  }
-  if (message.includes("invalid token") || message.includes("invalid otp") || message.includes("token is invalid")) {
-    return "El código no es válido. Revísalo o solicita uno nuevo.";
+  if (message.includes("expired")) {
+    return "El enlace ha caducado. Solicita uno nuevo.";
   }
   if (message.includes("failed to fetch") || message.includes("network")) {
     return "No se pudo conectar con el servicio de acceso. Comprueba tu conexión y vuelve a intentarlo.";
@@ -203,12 +181,10 @@ function translateAuthError(error, action) {
   if (message.includes("user not found") || message.includes("signups not allowed") || message.includes("not authorized")) {
     return "No se ha podido autorizar este correo. Comprueba que sea el correo facilitado a Training Kids.";
   }
-  if (message.includes("too many") || message.includes("request rate limit") || code.includes("over_request_rate_limit") || (action === "verify" && code === "429")) {
+  if (message.includes("too many") || message.includes("request rate limit") || code.includes("over_request_rate_limit")) {
     return "Se han realizado demasiados intentos. Espera unos minutos antes de volver a probar.";
   }
-  return action === "verify"
-    ? "No se pudo verificar el código. Revísalo o solicita uno nuevo."
-    : "No se pudo enviar el código de acceso. Vuelve a intentarlo en unos minutos.";
+  return "No se pudo enviar el enlace de acceso. Vuelve a intentarlo en unos minutos.";
 }
 
 async function logout() {
@@ -1076,7 +1052,7 @@ function render() {
 window.setState = setState;
 window.updateFamily = updateFamily;
 window.login = login;
-window.requestLoginCode = requestLoginCode;
+window.requestLoginLink = requestLoginLink;
 window.changeLoginEmail = changeLoginEmail;
 window.logout = logout;
 window.nextStep = nextStep;
