@@ -4,7 +4,7 @@ Aplicacion nueva para la plataforma comun modular de Training Kids, Football Aca
 
 ## Estado
 
-Fase B, Control 6. Sigue siendo una vista privada local con documentos aportados, campos rellenables, firma simulada, pagos simulados y estados operativos de inscripcion.
+Fase C conectada al proyecto Supabase de pruebas. El modo demo conserva `localStorage` y el codigo `123456`. El modo test usa Supabase Auth, sesion persistente, roles y lectura remota de familia, hijos, inscripciones, grupos, documentos y pagos. La vinculacion de usuarios y las comprobaciones RLS se ejecutaron correctamente. Solo queda pendiente la comprobacion visual del usuario administrador cuando finalice el limite temporal de emails de Supabase.
 
 ## Como abrir
 
@@ -14,17 +14,33 @@ Desde esta carpeta:
 python3 -m http.server 4174
 ```
 
-Despues abrir:
+Despues abrir el modo demo:
 
 ```text
 http://localhost:4174
 ```
 
+Modo test:
+
+```text
+http://localhost:4174/?mode=test
+```
+
 ## Acceso de prueba
+
+Modo demo:
 
 - Email: cualquiera.
 - Codigo temporal: `123456`.
 - Administracion: entrar primero y pulsar `Admin`.
+
+Modo test Supabase:
+
+- La URL y publishable key de pruebas estan en `config.local.js`, que permanece ignorado por Git.
+- Abrir con `?mode=test` y solicitar el enlace/codigo por email.
+- El enlace procesa la sesion y limpia los parametros de autenticacion de la URL.
+- Para salir, pulsar el boton `X` de la cabecera.
+- El boton `Admin` solo aparece si el usuario tiene rol `admin` u `owner`.
 
 ## Estructura actual
 
@@ -36,6 +52,12 @@ tk-platform-v1/
   data/
     mock-data.js
     local-adapter.js
+    supabase-adapter.js
+    app-config.js
+  supabase/
+    migrations/
+    seed/
+    tests/
   areas/
     access.js
     family.js
@@ -65,12 +87,20 @@ tk-platform-v1/
 - `areas/documents.js`: area documental y firma simulada preparada para adaptador real.
 - `ui/shared.js`: piezas comunes reutilizables como cabecera, nombres, tarjetas de grupo y avisos.
 
-## No conectado aun
+## Conectado en modo test
 
-- Supabase.
+- Supabase Auth por enlace/codigo de email y cierre de sesion real.
+- Sesion persistente al recargar.
+- Perfil, rol, familia, tutores, hijos e inscripciones.
+- Catalogo remoto de centros, grupos y tarifas.
+- Estados, documentos, firmas registradas y pagos existentes en modo lectura.
+- RLS y buckets privados definidos en la base de pruebas.
+
+## Sigue simulado
+
 - Stripe.
 - Firma real.
-- Emails reales.
+- Cambios funcionales de formularios, firma y pagos; se muestran registros remotos existentes, pero estas operaciones todavia no escriben en produccion.
 - Produccion.
 
 ## Regla de arquitectura
@@ -108,3 +138,18 @@ El flujo documental queda separado en pasos visibles: completar datos, revisar d
 La revision del contrato se realiza pagina a pagina dentro de la app para poder validar el final del documento sin depender del visor PDF del navegador. La app tambien ofrece ver y descargar el PDF generado. Al firmar, se conserva una copia local fija con datos, firma, version, aceptaciones, respuestas PAR-Q y hash SHA-256 del PDF local cuando el navegador lo permite.
 
 La autorizacion de imagen queda como documento independiente con decision explicita de autorizar o no autorizar, sin casilla premarcada y sin bloquear la inscripcion. Normativa y garantias sigue como lectura/descarga y aceptacion sin firma dibujada. SEPA y las fichas duplicadas de salud/emergencia quedan fuera del flujo actual, conservando historico si existieran copias firmadas.
+
+## Fase C Supabase test
+
+Archivos principales:
+
+- `data/supabase-adapter.js`: adaptador test compatible con la app actual. No usa `localStorage` como fallback silencioso.
+- `data/app-config.js`: seleccion explicita `demo` o `test`.
+- `config.example.js`: plantilla sin secretos.
+- `supabase/migrations/202609160001_phase_c_base.sql`: tablas, indices, RLS y buckets privados.
+- `supabase/seed/phase_c_seed.sql`: datos ficticios y pasos seguros para vincular usuarios Auth.
+- `supabase/tests/rls_isolation.sql`: plantilla de pruebas de aislamiento.
+- `supabase/migrations/202609180001_link_test_users_and_verify_rls.sql`: correccion idempotente, vinculacion de los dos usuarios de prueba y verificaciones RLS.
+- `docs/FASE_C_SUPABASE_TEST.md`: pasos para crear el proyecto y conectar la app.
+
+No debe pegarse la `service_role` en ningun archivo frontend. Usar solo URL publica y anon public key.

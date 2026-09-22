@@ -1,4 +1,5 @@
 export function appChrome({ state, content }) {
+  const canSeeAdmin = state.appMode === "demo" || state.session?.isAdmin;
   return `
     <div class="app-shell">
       <header class="topbar">
@@ -13,7 +14,7 @@ export function appChrome({ state, content }) {
             <button class="nav-button ${state.activeView === "family" ? "active" : ""}" onclick="setState({activeView:'family'})">Familia</button>
             <button class="nav-button ${state.activeView === "documents" ? "active" : ""}" onclick="setState({activeView:'documents'})">Documentos</button>
             <button class="nav-button ${state.activeView === "payments" ? "active" : ""}" onclick="setState({activeView:'payments'})">Pagos</button>
-            <button class="nav-button ${state.activeView === "admin" ? "active" : ""}" onclick="setState({activeView:'admin'})">Admin</button>
+            ${canSeeAdmin ? `<button class="nav-button ${state.activeView === "admin" ? "active" : ""}" onclick="setState({activeView:'admin'})">Admin</button>` : ""}
             <button class="nav-button ${state.activeView === "design" ? "active" : ""}" onclick="setState({activeView:'design'})">Diseño</button>
             <button class="icon-button" title="Salir" onclick="logout()">X</button>
           </nav>

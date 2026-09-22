@@ -11,7 +11,9 @@ import {
   steps,
   trainingKidsPlans,
 } from "./data/mock-data.js?v=13";
+import { loadAppConfig } from "./data/app-config.js";
 import { createLocalDataAdapter } from "./data/local-adapter.js?v=13";
+import { createSupabaseDataAdapter } from "./data/supabase-adapter.js";
 import { renderAuth, renderLoading } from "./areas/access.js?v=12";
 import { renderAdmin } from "./areas/admin.js?v=12";
 import { renderDesign } from "./areas/design.js?v=12";
@@ -23,11 +25,18 @@ import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=13";
 import { renderAdminPayments, renderPayments } from "./areas/payments.js?v=12";
 import { appChrome, serviceName, toast } from "./ui/shared.js?v=12";
 
-const adapter = createLocalDataAdapter({
-  initialState,
-  storageKey: STORAGE_KEY,
-  onChange: () => render(),
-});
+const appConfig = loadAppConfig();
+const adapter = appConfig.isSupabaseTest
+  ? await createSupabaseDataAdapter({
+      initialState,
+      config: appConfig,
+      onChange: () => render(),
+    })
+  : createLocalDataAdapter({
+      initialState: { ...initialState, appMode: "demo" },
+      storageKey: STORAGE_KEY,
+      onChange: () => render(),
+    });
 
 let activeSignatureDrawing = false;
 const signatureDrafts = {};
@@ -62,10 +71,28 @@ function addAudit(action, service = "Training Kids") {
   });
 }
 
-function login() {
+async function login() {
   const email = document.querySelector("#email").value.trim();
   const code = document.querySelector("#code").value.trim();
   if (!email) return toast("Introduce un email.");
+  if (appConfig.isSupabaseTest) {
+    if (!code) return requestLoginCode(email);
+    adapter.mutate((state) => {
+      state.uiLoading = true;
+      state.pendingOtpEmail = email;
+      state.authError = "";
+    });
+    try {
+      await adapter.verifyOtp(email, code);
+    } catch (error) {
+      adapter.setState({
+        uiLoading: false,
+        pendingOtpEmail: email,
+        authError: translateAuthError(error, "verify"),
+      });
+    }
+    return;
+  }
   if (code !== TEST_CODE) return toast("Codigo de prueba incorrecto. Usa 123456.");
 
   adapter.mutate((state) => {
@@ -88,7 +115,64 @@ function login() {
   }, 450);
 }
 
-function logout() {
+async function requestLoginCode(email) {
+  adapter.mutate((state) => {
+    state.uiLoading = true;
+    state.pendingOtpEmail = email;
+    state.authNotice = "";
+    state.authError = "";
+  });
+  try {
+    await adapter.requestOtp(email);
+    adapter.setState({
+      uiLoading: false,
+      pendingOtpEmail: email,
+      authError: "",
+      authNotice: "Si el email esta autorizado, recibiras un codigo temporal.",
+    });
+  } catch (error) {
+    console.warn("Supabase OTP request failed:", error?.message || error);
+    adapter.setState({
+      uiLoading: false,
+      pendingOtpEmail: email,
+      authNotice: "",
+      authError: translateAuthError(error, "request"),
+    });
+  }
+}
+
+function translateAuthError(error, action) {
+  const message = String(error?.message || "").toLowerCase();
+  const code = String(error?.code || error?.status || "").toLowerCase();
+  if (message.includes("email rate limit exceeded") || message.includes("rate limit") || code.includes("over_email_send_rate_limit")) {
+    return "Se ha alcanzado temporalmente el limite de correos de acceso. Espera unos minutos antes de solicitar otro enlace o codigo.";
+  }
+  if (message.includes("invalid email")) {
+    return "El formato del email no es valido. Revisalo e intentalo de nuevo.";
+  }
+  if (message.includes("token has expired") || message.includes("otp expired") || message.includes("expired")) {
+    return "El codigo o enlace ha caducado. Solicita uno nuevo.";
+  }
+  if (message.includes("invalid token") || message.includes("invalid otp") || message.includes("token is invalid")) {
+    return "El codigo no es valido. Revisalo o solicita uno nuevo.";
+  }
+  if (message.includes("failed to fetch") || message.includes("network")) {
+    return "No se pudo conectar con el servicio de acceso. Comprueba tu conexion y vuelve a intentarlo.";
+  }
+  return action === "verify"
+    ? "No se pudo verificar el codigo. Revisalo o solicita uno nuevo."
+    : "No se pudo enviar el enlace o codigo de acceso. Vuelve a intentarlo en unos minutos.";
+}
+
+async function logout() {
+  if (appConfig.isSupabaseTest && adapter.logout) {
+    try {
+      await adapter.logout();
+    } catch {
+      toast("No se pudo cerrar la sesion. Reintenta.");
+    }
+    return;
+  }
   adapter.setState({ session: null });
 }
 
@@ -911,17 +995,28 @@ function render() {
   const state = getState();
 
   if (state.uiLoading) {
-    app.innerHTML = renderLoading("Verificando codigo");
+    app.innerHTML = renderLoading(appConfig.isSupabaseTest ? "Conectando con Supabase" : "Verificando codigo", appConfig.isSupabaseTest);
     return;
   }
 
   if (!state.session) {
-    app.innerHTML = renderAuth({ state, testCode: TEST_CODE });
+    app.innerHTML = renderAuth({ state, testCode: TEST_CODE, appConfig });
     return;
   }
 
-  const context = { state, steps, stepLabels, services, centers, groups, trainingKidsPlans, documentTemplates, legalDocumentSources };
-  if (state.activeView === "admin") app.innerHTML = appChrome({ state, content: renderAdmin(context) });
+  const context = {
+    state,
+    steps,
+    stepLabels,
+    services,
+    centers: state.remoteCatalog?.centers || centers,
+    groups: state.remoteCatalog?.groups || groups,
+    trainingKidsPlans: state.remoteCatalog?.plans || trainingKidsPlans,
+    documentTemplates,
+    legalDocumentSources,
+  };
+  if (state.activeView === "admin" && (state.appMode === "demo" || state.session?.isAdmin)) app.innerHTML = appChrome({ state, content: renderAdmin(context) });
+  else if (state.activeView === "admin") app.innerHTML = appChrome({ state, content: renderFamily(context) });
   else if (state.activeView === "documents") app.innerHTML = appChrome({ state, content: renderDocuments(context) });
   else if (state.activeView === "payments") app.innerHTML = appChrome({ state, content: renderPayments(context) });
   else if (state.activeView === "design") app.innerHTML = appChrome({ state, content: renderDesign(context) });
@@ -932,6 +1027,7 @@ function render() {
 window.setState = setState;
 window.updateFamily = updateFamily;
 window.login = login;
+window.requestLoginCode = requestLoginCode;
 window.logout = logout;
 window.nextStep = nextStep;
 window.prevStep = prevStep;

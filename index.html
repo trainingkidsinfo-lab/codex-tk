@@ -3,11 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Training Kids Platform V1 - Fase B</title>
+    <title>Training Kids Platform V1 - Fase C</title>
     <link rel="stylesheet" href="./styles.css?v=13" />
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="./app.js?v=13"></script>
+    <script src="./config.local.js?v=2"></script>
+    <script>
+      window.TK_CONFIG = window.TK_CONFIG || { mode: "demo" };
+    </script>
+    <script type="module" src="./app.js?v=15"></script>
   </body>
 </html>
