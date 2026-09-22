@@ -6,6 +6,8 @@ Aplicacion nueva para la plataforma comun modular de Training Kids, Football Aca
 
 Fase C conectada al proyecto Supabase de pruebas. El modo demo conserva `localStorage` y el codigo `123456`. El modo test usa Supabase Auth, sesion persistente, roles y lectura remota de familia, hijos, inscripciones, grupos, documentos y pagos. La vinculacion de usuarios y las comprobaciones RLS se ejecutaron correctamente. Solo queda pendiente la comprobacion visual del usuario administrador cuando finalice el limite temporal de emails de Supabase.
 
+Fase C.1 usa exclusivamente un codigo OTP temporal enviado por correo en modo test. No muestra ni procesa enlaces magicos. El reenvio queda bloqueado durante 60 segundos y la sesion sigue gestionada y restaurada por el cliente oficial de Supabase.
+
 ## Como abrir
 
 Desde esta carpeta:
@@ -37,8 +39,8 @@ Modo demo:
 Modo test Supabase:
 
 - La URL y publishable key de pruebas estan en `config.local.js`, que permanece ignorado por Git.
-- Abrir con `?mode=test` y solicitar el enlace/codigo por email.
-- El enlace procesa la sesion y limpia los parametros de autenticacion de la URL.
+- Abrir con `?mode=test` y solicitar el codigo OTP por email.
+- Introducir el codigo temporal en la misma pantalla de acceso.
 - Para salir, pulsar el boton `X` de la cabecera.
 - El boton `Admin` solo aparece si el usuario tiene rol `admin` u `owner`.
 
@@ -89,7 +91,7 @@ tk-platform-v1/
 
 ## Conectado en modo test
 
-- Supabase Auth por enlace/codigo de email y cierre de sesion real.
+- Supabase Auth por codigo OTP de email y cierre de sesion real.
 - Sesion persistente al recargar.
 - Perfil, rol, familia, tutores, hijos e inscripciones.
 - Catalogo remoto de centros, grupos y tarifas.
@@ -151,5 +153,6 @@ Archivos principales:
 - `supabase/tests/rls_isolation.sql`: plantilla de pruebas de aislamiento.
 - `supabase/migrations/202609180001_link_test_users_and_verify_rls.sql`: correccion idempotente, vinculacion de los dos usuarios de prueba y verificaciones RLS.
 - `docs/FASE_C_SUPABASE_TEST.md`: pasos para crear el proyecto y conectar la app.
+- `docs/FASE_C1_OTP_CONFIGURACION.md`: plantilla manual para mostrar `{{ .Token }}` en el correo OTP.
 
 No debe pegarse la `service_role` en ningun archivo frontend. Usar solo URL publica y anon public key.

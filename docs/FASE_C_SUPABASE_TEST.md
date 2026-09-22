@@ -24,7 +24,7 @@ El archivo no debe volver a ejecutarse ni modificarse. Corrigio la representacio
 - Familia: `alexsotokurko23@gmail.com`, rol `family`, vinculada a la familia seed.
 - Administracion: `trainingkids.info@gmail.com`, rol `admin`, sin familia asociada.
 
-En la pantalla de acceso se solicita un enlace/codigo de email. El enlace debe abrirse en el mismo navegador. La app procesa la sesion, elimina de la URL los parametros de autenticacion y conserva la sesion al recargar. El boton `X` cierra la sesion real de Supabase.
+En la pantalla de acceso se solicita un codigo OTP por email y se introduce en la misma pantalla. La app conserva la sesion al recargar y limpia parametros antiguos de autenticacion de la URL. El boton `X` cierra la sesion real de Supabase.
 
 Si Supabase limita temporalmente los envios, la pantalla conserva el email introducido y muestra el error en español sin revelar si la cuenta existe. La comprobacion visual del usuario administrador queda pendiente hasta que termine ese limite.
 

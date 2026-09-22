@@ -19,6 +19,8 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
   let state = testState({ connectionStatus: "loading" });
   let supabase;
   let authSubscription;
+  let otpRequestInFlight = false;
+  let otpVerifyInFlight = false;
 
   function testState(patch = {}) {
     return {
@@ -35,13 +37,12 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     const { createClient } = await import(SUPABASE_JS_URL);
     supabase = createClient(config.supabaseUrl, config.supabaseAnonKey, {
       auth: {
-        flowType: "pkce",
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: true,
+        detectSessionInUrl: false,
       },
     });
-    await processAuthReturn();
+    cleanLegacyAuthUrl();
     await refreshSessionAndState();
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (!["SIGNED_IN", "SIGNED_OUT", "TOKEN_REFRESHED", "USER_UPDATED"].includes(event)) return;
@@ -60,22 +61,12 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     state = testState({ connectionStatus: "error", connectionError: friendlyError(error) });
   }
 
-  async function processAuthReturn() {
+  function cleanLegacyAuthUrl() {
     const url = new URL(window.location.href);
-    const code = url.searchParams.get("code");
-    const hasAuthResponse = code || url.hash.includes("access_token") || url.searchParams.has("error");
-    try {
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) throw error;
-      }
-    } finally {
-      if (hasAuthResponse) cleanAuthUrl(url);
-    }
-  }
-
-  function cleanAuthUrl(url) {
-    ["code", "error", "error_code", "error_description"].forEach((key) => url.searchParams.delete(key));
+    const legacyParams = ["code", "error", "error_code", "error_description", "token", "type"];
+    const hasLegacyAuthData = legacyParams.some((key) => url.searchParams.has(key)) || Boolean(url.hash);
+    if (!hasLegacyAuthData) return;
+    legacyParams.forEach((key) => url.searchParams.delete(key));
     url.hash = "";
     window.history.replaceState({}, document.title, `${url.pathname}${url.search}`);
   }
@@ -103,6 +94,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     const remoteState = isAdmin ? await loadAdminState() : await loadFamilyState(userId);
     state = testState({
       ...remoteState,
+      activeView: isAdmin ? "admin" : "family",
       session: {
         email: profile?.email || session.user.email,
         name: profile?.full_name || session.user.email,
@@ -335,9 +327,9 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
   }
 
   function friendlyError(error) {
-    const message = error?.message || "No se pudo conectar con Supabase.";
-    if (/failed to fetch|network/i.test(message)) return "No se pudo conectar con Supabase. Revisa la red y la URL del proyecto.";
-    return message;
+    const message = error?.message || "No se pudo conectar con el servicio de acceso.";
+    if (/failed to fetch|network/i.test(message)) return "No se pudo conectar con el servicio de acceso. Comprueba tu conexión.";
+    return "No se pudo preparar el acceso. Vuelve a intentarlo en unos minutos.";
   }
 
   function commit() {
@@ -362,21 +354,34 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     save() {},
     async requestOtp(email) {
       if (!supabase) throw new Error(state.connectionError || "Supabase no esta disponible.");
-      const redirectUrl = new URL(window.location.href);
-      redirectUrl.search = "?mode=test";
-      redirectUrl.hash = "";
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.toLowerCase(),
-        options: { shouldCreateUser: false, emailRedirectTo: redirectUrl.toString() },
-      });
-      if (error) throw error;
+      if (otpRequestInFlight) return;
+      otpRequestInFlight = true;
+      try {
+        const { error } = await supabase.auth.signInWithOtp({
+          email: email.trim().toLowerCase(),
+          options: { shouldCreateUser: false },
+        });
+        if (error) throw error;
+      } finally {
+        otpRequestInFlight = false;
+      }
     },
     async verifyOtp(email, token) {
       if (!supabase) throw new Error(state.connectionError || "Supabase no esta disponible.");
-      const { error } = await supabase.auth.verifyOtp({ email: email.toLowerCase(), token, type: "email" });
-      if (error) throw error;
-      await refreshSessionAndState();
-      commit();
+      if (otpVerifyInFlight) return;
+      otpVerifyInFlight = true;
+      try {
+        const { error } = await supabase.auth.verifyOtp({
+          email: email.trim().toLowerCase(),
+          token: token.replace(/\s+/g, ""),
+          type: "email",
+        });
+        if (error) throw error;
+        await refreshSessionAndState();
+        commit();
+      } finally {
+        otpVerifyInFlight = false;
+      }
     },
     async logout() {
       if (supabase) {
