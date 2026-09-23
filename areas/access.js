@@ -11,7 +11,7 @@ export function renderAuth({ state, testCode, appConfig }) {
           <img src="./assets/logo-training-kids-symbol.png" alt="" />
           <span><strong>Training</strong><span>Kids</span></span>
         </div>
-        <p class="eyebrow">Vista privada de prueba · ${isSupabaseTest ? "Fase C test" : "Modo demo"}</p>
+        <p class="eyebrow">Vista privada de prueba · ${isSupabaseTest ? "Fase D test" : "Modo demo"}</p>
         <h1>Acceso</h1>
         <p class="muted">${isSupabaseTest ? "Te enviaremos un enlace seguro para iniciar sesión. En este dispositivo mantendremos tu sesión iniciada." : "Introduce tu correo y usa el código temporal de prueba."}</p>
         ${state.connectionError ? `<div class="document-warning" role="alert">${escapeHtml(state.connectionError)}</div>` : ""}
@@ -60,7 +60,7 @@ export function renderLoading(message = "Preparando vista privada", isSupabaseTe
     <main class="loading-screen">
       <section class="loading-box">
         <div class="state-card loading">
-          <p class="eyebrow">${isSupabaseTest ? "Fase C · Supabase test" : "Modo demo"}</p>
+          <p class="eyebrow">${isSupabaseTest ? "Fase D · Supabase test" : "Modo demo"}</p>
           <h2>${message}</h2>
           <p class="muted">${isSupabaseTest ? "Cargando datos ficticios privados desde Supabase." : "Datos ficticios y locales. No se conecta ningun servicio externo."}</p>
         </div>

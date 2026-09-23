@@ -14,7 +14,7 @@ export function renderTrainingKidsEnrollment({ state, child, centers, groups, se
         <div class="badge-row">
           <span class="badge turquoise">Matrícula 20 €</span>
           <span class="badge">Precios configurables</span>
-          <span class="badge">Datos ficticios</span>
+          <span class="badge">${state.appMode === "test" ? "Solicitud real de prueba" : "Datos ficticios"}</span>
         </div>
       </div>
       <div class="form-grid">
@@ -46,7 +46,7 @@ export function renderTrainingKidsEnrollment({ state, child, centers, groups, se
     </div>
     <div class="actions" style="margin-top:16px">
       <button class="button ghost" onclick="prevStep()">Atras</button>
-      <button class="button" onclick="saveTrainingEnrollment()">Guardar inscripcion simulada</button>
+      <button class="button" onclick="saveTrainingEnrollment()" ${state.saveState === "saving" ? "disabled" : ""}>${state.saveState === "saving" ? "Enviando…" : state.appMode === "test" ? "Enviar solicitud" : "Guardar inscripción simulada"}</button>
     </div>
   `;
 }

@@ -13,14 +13,15 @@ import {
 } from "./data/mock-data.js?v=13";
 import { loadAppConfig } from "./data/app-config.js";
 import { createLocalDataAdapter } from "./data/local-adapter.js?v=13";
-import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=3";
-import { renderAuth, renderLoading } from "./areas/access.js?v=14";
-import { renderAdmin } from "./areas/admin.js?v=12";
+import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=4";
+import { translateDataError } from "./data/errors.js?v=1";
+import { renderAuth, renderLoading } from "./areas/access.js?v=15";
+import { renderAdmin } from "./areas/admin.js?v=13";
 import { renderDesign } from "./areas/design.js?v=12";
 import { renderDocuments } from "./areas/documents.js?v=13";
-import { renderFamily } from "./areas/family.js?v=12";
+import { renderFamily } from "./areas/family.js?v=13";
 import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=12";
-import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=13";
+import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=14";
 import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=13";
 import { renderAdminPayments, renderPayments } from "./areas/payments.js?v=12";
 import { appChrome, serviceName, toast } from "./ui/shared.js?v=12";
@@ -52,7 +53,25 @@ function setState(patch) {
 }
 
 function updateFamily(patch) {
-  adapter.updateFamily(patch);
+  adapter.mutate((state) => {
+    state.family = { ...state.family, ...patch };
+    state.formDirty = true;
+  });
+}
+
+async function saveFamilyDetails() {
+  if (!adapter.isRemote) {
+    adapter.setState({ formDirty: false });
+    return nextStep();
+  }
+  try {
+    await adapter.saveFamily(getState().family);
+    adapter.setState({ formDirty: false });
+    toast("Datos familiares guardados.");
+    nextStep();
+  } catch (error) {
+    toast(translateDataError(error));
+  }
 }
 
 function getChild(id = getState().selectedChildId) {
@@ -223,7 +242,26 @@ function updateChild(childId, patch) {
       action: `Datos compartidos actualizados para ${childName}`,
       service: "Plataforma",
     });
+    state.formDirty = true;
   });
+}
+
+async function saveSelectedChild() {
+  const child = getChild();
+  if (!child) return toast("Selecciona un hijo.");
+  if (!child.name?.trim() || child.name.trim().split(/\s+/).length < 2) return toast("Indica nombre y apellidos.");
+  if (!adapter.isRemote) {
+    adapter.setState({ formDirty: false });
+    return nextStep();
+  }
+  try {
+    await adapter.savePlayer(child);
+    adapter.setState({ formDirty: false });
+    toast("Datos del hijo guardados.");
+    nextStep();
+  } catch (error) {
+    toast(translateDataError(error));
+  }
 }
 
 function selectService(serviceId) {
@@ -251,7 +289,30 @@ function selectService(serviceId) {
   setState({ selectedService: serviceId, familyStep: 4 });
 }
 
-function saveTrainingEnrollment() {
+async function saveTrainingEnrollment() {
+  if (adapter.isRemote) {
+    const state = getState();
+    const plan = state.remoteCatalog?.plans?.find((item) => item.id === state.selectedPlan);
+    const season = state.remoteCatalog?.seasons?.find((item) => item.service === "training_kids");
+    const child = getChild();
+    if (!child || !state.selectedCenter || !plan || !season) return toast("Completa centro, temporada y tarifa antes de enviar.");
+    if (!window.confirm("¿Enviar esta solicitud a administración? Podrás ver su estado desde tu cuenta.")) return;
+    try {
+      await adapter.submitEnrollment({
+        playerId: child.id,
+        serviceId: "training_kids",
+        locationId: state.selectedCenter,
+        seasonId: season.id,
+        planId: plan.id,
+        planPriceId: plan.priceId,
+        availability: child.availability || [],
+      });
+      toast("Solicitud enviada a administración.");
+    } catch (error) {
+      toast(translateDataError(error));
+    }
+    return;
+  }
   adapter.mutate((state) => {
     let existing = state.enrollments.find((item) => item.childId === state.selectedChildId && item.service === "training_kids");
     if (existing) {
@@ -289,6 +350,33 @@ function saveTrainingEnrollment() {
     });
   });
   window.setTimeout(() => toast("Inscripcion simulada guardada."), 100);
+}
+
+async function reviewEnrollment(enrollmentId, decision) {
+  if (!adapter.isRemote) return toast("Esta revisión real solo está disponible en modo test.");
+  const confirmation = decision === "approve" ? "¿Aprobar esta solicitud?" : decision === "reject" ? "¿Rechazar esta solicitud?" : "¿Solicitar cambios a la familia?";
+  if (!window.confirm(confirmation)) return;
+  const state = getState();
+  const groupId = decision === "approve" ? (state.adminGroupDrafts?.[enrollmentId] || null) : null;
+  const notes = state.adminReviewNotes?.[enrollmentId] || "";
+  try {
+    await adapter.reviewEnrollment(enrollmentId, decision, groupId, notes);
+    toast(decision === "approve" ? "Solicitud aprobada." : decision === "reject" ? "Solicitud rechazada." : "Cambios solicitados.");
+  } catch (error) {
+    toast(translateDataError(error));
+  }
+}
+
+function setAdminGroupDraft(enrollmentId, groupId) {
+  adapter.setState({
+    adminGroupDrafts: { ...(getState().adminGroupDrafts || {}), [enrollmentId]: groupId },
+  });
+}
+
+function setAdminReviewNote(enrollmentId, notes) {
+  adapter.setState({
+    adminReviewNotes: { ...(getState().adminReviewNotes || {}), [enrollmentId]: notes },
+  });
 }
 
 function assignGroup(enrollmentId, groupId) {
@@ -993,6 +1081,24 @@ function simulateTutor() {
 }
 
 function simulateChild() {
+  if (adapter.isRemote) {
+    const id = `draft-${Date.now()}`;
+    adapter.mutate((state) => {
+      state.family.children.push({
+        id,
+        name: "",
+        birthDate: "",
+        team: "",
+        medical: "",
+        emergencyName: state.family.tutors[0]?.name || "",
+        emergencyPhone: state.family.phone || "",
+        availability: [],
+        isDraft: true,
+      });
+      state.selectedChildId = id;
+    });
+    return;
+  }
   adapter.mutate((state) => {
     const id = `child-${Date.now()}`;
     state.family.children.push({
@@ -1052,6 +1158,7 @@ function render() {
 
 window.setState = setState;
 window.updateFamily = updateFamily;
+window.saveFamilyDetails = saveFamilyDetails;
 window.login = login;
 window.requestLoginLink = requestLoginLink;
 window.changeLoginEmail = changeLoginEmail;
@@ -1059,9 +1166,13 @@ window.logout = logout;
 window.nextStep = nextStep;
 window.prevStep = prevStep;
 window.updateChild = updateChild;
+window.saveSelectedChild = saveSelectedChild;
 window.selectService = selectService;
 window.saveTrainingEnrollment = saveTrainingEnrollment;
 window.assignGroup = assignGroup;
+window.reviewEnrollment = reviewEnrollment;
+window.setAdminGroupDraft = setAdminGroupDraft;
+window.setAdminReviewNote = setAdminReviewNote;
 window.activateEnrollment = activateEnrollment;
 window.withdrawEnrollment = withdrawEnrollment;
 window.confirmAdminAction = confirmAdminAction;
@@ -1083,5 +1194,11 @@ window.confirmSimulatedSignature = confirmSimulatedSignature;
 window.acceptInformativeDocument = acceptInformativeDocument;
 window.simulateTutor = simulateTutor;
 window.simulateChild = simulateChild;
+
+window.addEventListener("beforeunload", (event) => {
+  if (!getState().formDirty) return;
+  event.preventDefault();
+  event.returnValue = "";
+});
 
 render();

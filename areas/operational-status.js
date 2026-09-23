@@ -13,10 +13,11 @@ export function operationalStatusLabel(status) {
 }
 
 export function getEnrollmentOperationalSummary({ enrollment, state, services, centers, groups, trainingKidsPlans }) {
-  const child = state.family.children.find((item) => item.id === enrollment.childId);
+  const child = (state.adminChildren || state.family.children).find((item) => item.id === enrollment.childId);
+  const family = state.adminFamilies?.find((item) => item.id === enrollment.familyId) || state.family;
   const payment = state.payments.find((item) => item.enrollmentId === enrollment.id);
   const group = groups.find((item) => item.id === enrollment.groupId);
-  const personal = getPersonalRequirement({ state, child });
+  const personal = getPersonalRequirement({ family, child });
   const documents = getDocumentRequirement({ enrollment, state });
   const groupRequirement = getGroupRequirement({ enrollment, group, state, groups, centers });
   const paymentRequirement = getPaymentRequirement({ enrollment, payment });
@@ -86,12 +87,12 @@ export function validateGroupAssignment({ enrollment, groupId, state, centers, g
   return { ok: true };
 }
 
-function getPersonalRequirement({ state, child }) {
+function getPersonalRequirement({ family, child }) {
   const missing = [];
-  if (!state.family.name?.trim()) missing.push("nombre familiar");
-  if (!state.family.phone?.trim()) missing.push("telefono familiar");
-  if (!state.family.address?.trim()) missing.push("direccion familiar");
-  if (!state.family.tutors.some((tutor) => tutor.name?.trim() && tutor.email?.trim() && tutor.phone?.trim())) {
+  if (!family?.name?.trim()) missing.push("nombre familiar");
+  if (!family?.phone?.trim()) missing.push("telefono familiar");
+  if (!family?.address?.trim()) missing.push("direccion familiar");
+  if (!family?.tutors?.some((tutor) => tutor.name?.trim() && tutor.email?.trim())) {
     missing.push("tutor con nombre, email y telefono");
   }
   if (!child?.name?.trim()) missing.push("nombre del hijo");

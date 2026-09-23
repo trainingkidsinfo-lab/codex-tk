@@ -1,13 +1,15 @@
 import { centerName, planName, serviceName } from "../ui/shared.js";
 import { renderAdminDocuments } from "./documents.js";
-import { getEnrollmentOperationalSummary, getGroupOccupancy } from "./operational-status.js";
+import { getEnrollmentOperationalSummary, getGroupOccupancy } from "./operational-status.js?v=14";
 import { renderAdminPayments } from "./payments.js";
 
 export function renderAdmin({ state, services, centers, groups, trainingKidsPlans, documentTemplates, legalDocumentSources }) {
   const filter = state.adminServiceFilter;
+  const search = String(state.adminSearch || "").trim().toLowerCase();
   const summaries = state.enrollments.map((enrollment) => getEnrollmentOperationalSummary({ enrollment, state, services, centers, groups, trainingKidsPlans }));
   const filteredSummaries = summaries
     .filter((summary) => filter === "all" || summary.service === filter)
+    .filter((summary) => !search || [summary.child?.name, summary.child?.familyName].some((value) => String(value || "").toLowerCase().includes(search)))
     .filter((summary) => (
       state.operationalStatusFilter === "all"
       || summary.status === state.operationalStatusFilter
@@ -30,7 +32,7 @@ export function renderAdmin({ state, services, centers, groups, trainingKidsPlan
           <div class="hero-content">
             <p class="eyebrow">Panel administrativo unico</p>
             <h1>Operativa por servicio</h1>
-            <p class="muted">Filtros, estados y acciones simuladas. Las reglas comerciales se mantienen separadas por modulo.</p>
+            <p class="muted">${state.appMode === "test" ? "Familias y solicitudes cargadas desde Supabase. Las decisiones se registran mediante operaciones protegidas." : "Filtros, estados y acciones simuladas del modo demo."}</p>
           </div>
           <div class="hero-side">
             <div class="hero-pill">${filteredSummaries.length} inscripciones</div>
@@ -46,7 +48,18 @@ export function renderAdmin({ state, services, centers, groups, trainingKidsPlan
           <div class="stat"><strong>${groups.filter((g) => getGroupOccupancy({ group: g, state }).full).length}</strong><span class="muted">Grupos llenos</span></div>
           <div class="stat"><strong>0</strong><span class="muted">Impagos reales</span></div>
         </div>
-        <section class="section-title"><h2>Inscripciones</h2><button class="button ghost" onclick="simulatePayment()">Pago prueba simulado</button></section>
+        ${state.saveMessage ? `<div class="${state.saveState === "error" ? "document-warning" : "status-ok"}" role="status">${state.saveMessage}</div>` : ""}
+        <section class="section-title"><h2>Familias</h2></section>
+        <div class="field"><label for="admin-search">Buscar familia o hijo</label><input id="admin-search" type="search" value="${escapeAttribute(state.adminSearch || "")}" onchange="setState({adminSearch:this.value})" placeholder="Nombre de familia o hijo" /></div>
+        <div class="grid two">
+          ${(state.adminFamilies || [state.family]).filter((family) => !search || [family.name, family.email, ...family.children.map((child) => child.name)].some((value) => String(value || "").toLowerCase().includes(search))).map((family) => `
+            <article class="person-card">
+              <h3>${family.name}</h3>
+              <p class="muted">${family.email} · ${family.phone || "Sin teléfono"}</p>
+              <div class="badge-row"><span class="badge">${family.tutors.length} adultos</span><span class="badge turquoise">${family.children.length} hijos</span></div>
+            </article>`).join("") || `<div class="empty">No hay familias para esta búsqueda.</div>`}
+        </div>
+        <section class="section-title"><h2>Solicitudes e inscripciones</h2>${state.appMode === "demo" ? `<button class="button ghost" onclick="simulatePayment()">Pago prueba simulado</button>` : ""}</section>
         <div class="doc-filter-row">
           ${operationalFilterButton("all", "Todas", state.operationalStatusFilter)}
           ${operationalFilterButton("pending", "Pendientes", state.operationalStatusFilter)}
@@ -80,7 +93,7 @@ export function renderAdmin({ state, services, centers, groups, trainingKidsPlan
 
 function renderEnrollmentAdmin({ summary, enrollment, state, services, centers, groups, trainingKidsPlans }) {
   if (!enrollment) return "";
-  const child = summary.child || state.family.children.find((item) => item.id === enrollment.childId) || state.family.children[0];
+  const child = summary.child || (state.adminChildren || state.family.children).find((item) => item.id === enrollment.childId) || state.family.children[0];
   const validGroups = groups.filter((group) => (
     group.service === enrollment.service
     && (!enrollment.centerId || group.centerId === enrollment.centerId)
@@ -95,6 +108,8 @@ function renderEnrollmentAdmin({ summary, enrollment, state, services, centers, 
         ${summary.needsReview ? `<span class="badge red">Revision administrativa</span>` : ""}
       </div>
       <h3>${child.name}</h3>
+      ${child.familyName ? `<p class="muted">${child.familyName}</p>` : ""}
+      ${enrollment.remote ? `<div class="badge-row"><span class="badge">Revisión: ${reviewLabel(enrollment.reviewStatus)}</span></div>` : ""}
       <ul class="small-list">
         <li><span>Centro</span><strong>${summary.centerLabel}</strong></li>
         <li><span>Plan</span><strong>${enrollment.planId ? planName(trainingKidsPlans, enrollment.planId) : "Prealta"}</strong></li>
@@ -108,7 +123,7 @@ function renderEnrollmentAdmin({ summary, enrollment, state, services, centers, 
       ${enrollment.service === "training_kids" ? `
         <div class="field">
           <label>Asignar grupo definitivo</label>
-          <select onchange="assignGroup('${enrollment.id}', this.value)">
+          <select onchange="${state.appMode === "test" ? `setAdminGroupDraft('${enrollment.id}', this.value)` : `assignGroup('${enrollment.id}', this.value)`}">
             <option value="">Pendiente</option>
             ${validGroups.map((group) => {
               const occupancy = getGroupOccupancy({ group, state });
@@ -116,9 +131,17 @@ function renderEnrollmentAdmin({ summary, enrollment, state, services, centers, 
             }).join("")}
           </select>
         </div>
+        ${state.appMode === "test" ? `<div class="field"><label>Observaciones para la familia</label><textarea onchange="setAdminReviewNote('${enrollment.id}', this.value)"></textarea></div>` : ""}
         <div class="actions">
-          <button class="button" ${summary.status === "ready" ? "" : "disabled"} onclick="activateEnrollment('${enrollment.id}')">Activar</button>
-          <button class="button ghost" ${summary.status === "active" ? "" : "disabled"} onclick="withdrawEnrollment('${enrollment.id}')">Dar de baja</button>
+          ${state.appMode === "test" ? `
+            <button class="button" onclick="reviewEnrollment('${enrollment.id}','approve')" ${state.saveState === "saving" ? "disabled" : ""}>Aprobar solicitud</button>
+            <button class="button ghost" onclick="reviewEnrollment('${enrollment.id}','request_changes')" ${state.saveState === "saving" ? "disabled" : ""}>Solicitar cambios</button>
+            <button class="button ghost" onclick="reviewEnrollment('${enrollment.id}','reject')" ${state.saveState === "saving" ? "disabled" : ""}>Rechazar</button>
+          ` : ""}
+          ${state.appMode === "demo" ? `
+            <button class="button" ${summary.status === "ready" ? "" : "disabled"} onclick="activateEnrollment('${enrollment.id}')">Activar</button>
+            <button class="button ghost" ${summary.status === "active" ? "" : "disabled"} onclick="withdrawEnrollment('${enrollment.id}')">Dar de baja</button>
+          ` : ""}
         </div>
         ${pendingAction ? renderAdminConfirmation(pendingAction) : ""}
       ` : `
@@ -126,6 +149,10 @@ function renderEnrollmentAdmin({ summary, enrollment, state, services, centers, 
       `}
     </article>
   `;
+}
+
+function escapeAttribute(value) {
+  return String(value || "").replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
 function renderAdminConfirmation(action) {
@@ -167,4 +194,8 @@ function renderAdminGroupCard({ group, state, services, centers }) {
 function operationalFilterButton(value, label, activeValue) {
   const realValue = value === "pending" ? "pending" : value;
   return `<button class="side-filter ${activeValue === realValue ? "active" : ""}" onclick="setState({operationalStatusFilter:'${realValue}'})">${label}</button>`;
+}
+
+function reviewLabel(status) {
+  return ({ pending: "Pendiente", approved: "Aprobada", changes_requested: "Cambios solicitados", rejected: "Rechazada" })[status] || "Pendiente";
 }
