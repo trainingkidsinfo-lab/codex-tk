@@ -24,7 +24,7 @@ El archivo no debe volver a ejecutarse ni modificarse. Corrigio la representacio
 - Familia: `alexsotokurko23@gmail.com`, rol `family`, vinculada a la familia seed.
 - Administracion: `trainingkids.info@gmail.com`, rol `admin`, sin familia asociada.
 
-En la pantalla de acceso se solicita temporalmente un magic link por email. Debe abrirse en el mismo navegador y vuelve exactamente a `http://127.0.0.1:4181/?mode=test`. La app intercambia el retorno de forma segura, conserva la sesion al recargar y limpia los parametros de autenticacion de la URL. El boton `X` cierra la sesion real de Supabase.
+En la pantalla de acceso se solicita temporalmente un magic link por email. Debe abrirse en el mismo navegador y vuelve exactamente a `http://127.0.0.1:4181/?mode=test`. La app estatica usa el flujo implicito de Supabase, permite que el cliente oficial cree la sesion desde el retorno y solo despues limpia los parametros de autenticacion. La sesion se conserva al recargar y el boton `X` cierra la sesion real de Supabase.
 
 Si Supabase limita temporalmente los envios, la pantalla conserva el email introducido y muestra el error en español sin revelar si la cuenta existe. La comprobacion visual del usuario administrador queda pendiente hasta que termine ese limite.
 

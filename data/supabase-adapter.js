@@ -1,7 +1,6 @@
 import { assertSupabaseConfig } from "./app-config.js";
 
 const SUPABASE_JS_URL = "https://esm.sh/@supabase/supabase-js@2";
-const TEST_MAGIC_LINK_REDIRECT = "http://127.0.0.1:4181/?mode=test";
 const TEMPLATE_BY_CODE = {
   activity_contract: "tk-service-terms",
   image_authorization: "tk-image-rights",
@@ -15,12 +14,33 @@ const clone = (value) => typeof structuredClone === "function"
 const first = (value) => Array.isArray(value) ? value[0] : value;
 const money = (cents) => Number(cents || 0) / 100;
 
+export function parseAuthReturn(href) {
+  const url = new URL(href);
+  const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
+  const errorDescription = url.searchParams.get("error_description") || hash.get("error_description");
+  const errorCode = url.searchParams.get("error_code") || hash.get("error_code");
+  return {
+    present: Boolean(url.hash) || ["code", "error", "error_code", "error_description", "token", "type"]
+      .some((key) => url.searchParams.has(key)),
+    error: errorDescription || url.searchParams.get("error") || hash.get("error") || "",
+    errorCode: errorCode || "",
+  };
+}
+
+export function cleanAuthReturnHref(href) {
+  const url = new URL(href);
+  ["code", "error", "error_code", "error_description", "token", "type"].forEach((key) => url.searchParams.delete(key));
+  url.hash = "";
+  return `${url.pathname}${url.search}`;
+}
+
 export async function createSupabaseDataAdapter({ initialState, config, onChange }) {
   assertSupabaseConfig(config);
   let state = testState({ connectionStatus: "loading" });
   let supabase;
   let authSubscription;
   let otpRequestInFlight = false;
+  const authReturn = parseAuthReturn(window.location.href);
 
   function testState(patch = {}) {
     return {
@@ -37,14 +57,14 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     const { createClient } = await import(SUPABASE_JS_URL);
     supabase = createClient(config.supabaseUrl, config.supabaseAnonKey, {
       auth: {
-        flowType: "pkce",
+        flowType: "implicit",
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: false,
+        detectSessionInUrl: true,
       },
     });
-    await processAuthReturn();
     await refreshSessionAndState();
+    if (authReturn.present) cleanAuthReturnUrl();
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (!["SIGNED_IN", "SIGNED_OUT", "TOKEN_REFRESHED", "USER_UPDATED"].includes(event)) return;
       queueMicrotask(async () => {
@@ -59,31 +79,26 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     });
     authSubscription = data.subscription;
   } catch (error) {
+    console.error("Supabase authentication initialization failed:", error);
+    if (authReturn.present) cleanAuthReturnUrl();
     state = testState({ connectionStatus: "error", connectionError: friendlyError(error) });
   }
 
-  async function processAuthReturn() {
-    const url = new URL(window.location.href);
-    const code = url.searchParams.get("code");
-    const authError = url.searchParams.get("error_description") || url.searchParams.get("error");
-    const hasAuthData = code || authError || Boolean(url.hash);
-    if (!hasAuthData) return;
-    try {
-      if (authError) throw new Error(decodeURIComponent(authError.replace(/\+/g, " ")));
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) throw error;
-      }
-    } finally {
-      ["code", "error", "error_code", "error_description", "token", "type"].forEach((key) => url.searchParams.delete(key));
-      url.hash = "";
-      window.history.replaceState({}, document.title, `${url.pathname}${url.search}`);
-    }
+  function cleanAuthReturnUrl() {
+    window.history.replaceState({}, document.title, cleanAuthReturnHref(window.location.href));
   }
 
   async function refreshSessionAndState() {
     const { data, error } = await supabase.auth.getSession();
     if (error) throw error;
+    if (authReturn.error) {
+      const returnError = new Error(authReturn.error.replace(/\+/g, " "));
+      returnError.code = authReturn.errorCode;
+      throw returnError;
+    }
+    if (authReturn.present && !data.session) {
+      throw new Error("El enlace de acceso no ha creado una sesión válida. Solicita uno nuevo.");
+    }
     if (!data.session) {
       state = testState();
       return;
@@ -339,6 +354,10 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
   function friendlyError(error) {
     const message = error?.message || "No se pudo conectar con el servicio de acceso.";
     if (/failed to fetch|network/i.test(message)) return "No se pudo conectar con el servicio de acceso. Comprueba tu conexión.";
+    if (/expired|otp_expired/i.test(message)) return "El enlace de acceso ha caducado. Solicita uno nuevo.";
+    if (/invalid|no ha creado una sesión válida/i.test(message)) return "El enlace de acceso no es válido o ya se ha utilizado. Solicita uno nuevo.";
+    if (/pkce code verifier/i.test(message)) return "No se pudo restaurar la sesión del enlace. Solicita uno nuevo y ábrelo en este mismo navegador.";
+    if (/vinculacion|familia autorizada/i.test(message)) return "Tu usuario existe, pero todavía no está vinculado a una familia autorizada.";
     return "No se pudo preparar el acceso. Vuelve a intentarlo en unos minutos.";
   }
 
@@ -367,14 +386,23 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
       if (otpRequestInFlight) return;
       otpRequestInFlight = true;
       try {
-        const { error } = await supabase.auth.signInWithOtp({
+        const redirectTo = `${window.location.origin}/?mode=test`;
+        const { data, error } = await supabase.auth.signInWithOtp({
           email: email.trim().toLowerCase(),
           options: {
             shouldCreateUser: false,
-            emailRedirectTo: TEST_MAGIC_LINK_REDIRECT,
+            emailRedirectTo: redirectTo,
           },
         });
+        console.info("Supabase signInWithOtp result:", {
+          ok: !error,
+          errorCode: error?.code || error?.status || null,
+          hasUser: Boolean(data?.user),
+          hasSession: Boolean(data?.session),
+          redirectOrigin: window.location.origin,
+        });
         if (error) throw error;
+        return data;
       } finally {
         otpRequestInFlight = false;
       }

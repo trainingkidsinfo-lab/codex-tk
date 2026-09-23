@@ -13,7 +13,7 @@ import {
 } from "./data/mock-data.js?v=13";
 import { loadAppConfig } from "./data/app-config.js";
 import { createLocalDataAdapter } from "./data/local-adapter.js?v=13";
-import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=2";
+import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=3";
 import { renderAuth, renderLoading } from "./areas/access.js?v=14";
 import { renderAdmin } from "./areas/admin.js?v=12";
 import { renderDesign } from "./areas/design.js?v=12";
@@ -118,8 +118,9 @@ async function requestLoginLink(email) {
       pendingLinkEmail: normalizedEmail,
       authEmailDraft: normalizedEmail,
       resendAvailableAt,
+      connectionError: "",
       authError: "",
-      authNotice: "Enlace enviado. Revisa tu correo electrónico.",
+      authNotice: "Te hemos enviado un enlace de acceso. Ábrelo en este mismo navegador.",
     });
     startResendCountdown();
   } catch (error) {

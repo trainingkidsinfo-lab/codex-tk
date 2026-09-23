@@ -6,7 +6,7 @@ Aplicacion nueva para la plataforma comun modular de Training Kids, Football Aca
 
 Fase C conectada al proyecto Supabase de pruebas. El modo demo conserva `localStorage` y el codigo `123456`. El modo test usa Supabase Auth, sesion persistente, roles y lectura remota de familia, hijos, inscripciones, grupos, documentos y pagos. La vinculacion de usuarios y las comprobaciones RLS se ejecutaron correctamente. Solo queda pendiente la comprobacion visual del usuario administrador cuando finalice el limite temporal de emails de Supabase.
 
-Fase C.1 usa temporalmente un magic link enviado por correo en modo test, compatible con la plantilla predeterminada de Supabase. El retorno se realiza en `http://127.0.0.1:4181/?mode=test`, el reenvio queda bloqueado durante 60 segundos y la sesion sigue gestionada y restaurada por el cliente oficial de Supabase. El codigo OTP queda pendiente hasta disponer de SMTP corporativo.
+Fase C.1 usa temporalmente un magic link enviado por correo en modo test, compatible con la plantilla predeterminada de Supabase. La aplicacion estatica usa el flujo implicito del cliente oficial, procesa el retorno antes de limpiar la URL y conserva la sesion local. El retorno se realiza en `http://127.0.0.1:4181/?mode=test` y el reenvio queda bloqueado durante 60 segundos. El codigo OTP queda pendiente hasta disponer de SMTP corporativo.
 
 ## Como abrir
 

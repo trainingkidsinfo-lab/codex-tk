@@ -34,7 +34,7 @@ export function renderAuth({ state, testCode, appConfig }) {
             : `<button class="button" onclick="login()">Entrar</button>`}
           ${state.authError ? `<div class="document-warning" role="alert">${escapeHtml(state.authError)}</div>` : ""}
           ${state.authNotice ? `<div class="status-ok">${escapeHtml(state.authNotice)}</div>` : ""}
-          ${isSupabaseTest ? `<p class="muted">Abre el enlace recibido en este mismo navegador.</p>` : ""}
+          ${isSupabaseTest && !isLinkSent ? `<p class="muted">Abre el enlace recibido en este mismo navegador.</p>` : ""}
           ${!isSupabaseTest ? `<p class="muted">Codigo simulado para modo demo: <strong>${testCode}</strong></p>` : ""}
         </div>
       </section>
