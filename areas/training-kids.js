@@ -46,7 +46,13 @@ export function renderTrainingKidsEnrollment({ state, child, centers, groups, se
     </div>
     <div class="actions" style="margin-top:16px">
       <button class="button ghost" onclick="prevStep()">Atras</button>
-      <button class="button" onclick="saveTrainingEnrollment()" ${state.saveState === "saving" ? "disabled" : ""}>${state.saveState === "saving" ? "Enviando…" : state.appMode === "test" ? "Enviar solicitud" : "Guardar inscripción simulada"}</button>
+      ${state.appMode === "test" && state.enrollmentSubmitConfirmed ? `
+        <button class="button ghost" onclick="setState({enrollmentSubmitConfirmed:false})">Cancelar</button>
+        <button class="button" onclick="saveTrainingEnrollment()" ${state.saveState === "saving" ? "disabled" : ""}>${state.saveState === "saving" ? "Enviando…" : "Confirmar envío"}</button>
+      ` : `
+        <button class="button" onclick="saveTrainingEnrollment()" ${state.saveState === "saving" ? "disabled" : ""}>${state.saveState === "saving" ? "Enviando…" : state.appMode === "test" ? "Enviar solicitud" : "Guardar inscripción simulada"}</button>
+      `}
     </div>
+    ${state.appMode === "test" && state.enrollmentSubmitConfirmed ? `<p class="notice warning" role="status">La solicitud se enviará a administración. Confirma el envío para continuar.</p>` : ""}
   `;
 }

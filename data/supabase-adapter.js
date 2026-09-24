@@ -35,12 +35,45 @@ export function cleanAuthReturnHref(href) {
   return `${url.pathname}${url.search}`;
 }
 
+export function createAuthenticatedFetch({ projectUrl, getToken, fetchImpl = fetch, onDiagnostic = () => {} }) {
+  return async (input, init = {}) => {
+    const requestUrl = typeof input === "string" ? input : input.url;
+    const isProjectRest = requestUrl.startsWith(`${projectUrl}/rest/v1/`);
+    const headers = new Headers(init.headers || (typeof input === "string" ? undefined : input.headers));
+    const token = getToken();
+    if (isProjectRest && token) headers.set("Authorization", `Bearer ${token}`);
+    const authorization = headers.get("Authorization") || "";
+    const response = await fetchImpl(input, { ...init, headers });
+    if (isProjectRest && !response.ok) {
+      let body = {};
+      try { body = await response.clone().json(); } catch { body = { message: response.statusText }; }
+      onDiagnostic({
+        status: response.status,
+        code: body?.code || null,
+        message: body?.message || response.statusText,
+        details: body?.details || null,
+        hint: body?.hint || null,
+        authorization: authorization.startsWith("Bearer ey") ? "session_jwt" : authorization.startsWith("Bearer sb_") ? "publishable_key" : authorization ? "other" : "missing",
+        projectHost: new URL(projectUrl).host,
+      });
+    }
+    return response;
+  };
+}
+
 export async function createSupabaseDataAdapter({ initialState, config, onChange }) {
   assertSupabaseConfig(config);
   let state = testState({ connectionStatus: "loading" });
   let supabase;
   let authSubscription;
   let otpRequestInFlight = false;
+  let initializationComplete = false;
+  let initialAuthEvent = { event: "PENDING", hasSession: false };
+  let activeSessionToken = "";
+  let lastSafeSession = null;
+  let lastPostgrestDiagnostic = null;
+  let resolveInitialAuthEvent;
+  const initialAuthEventPromise = new Promise((resolve) => { resolveInitialAuthEvent = resolve; });
   const operationsInFlight = new Set();
   const authReturn = parseAuthReturn(window.location.href);
 
@@ -57,6 +90,14 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
 
   try {
     const { createClient } = await import(SUPABASE_JS_URL);
+    const authenticatedFetch = createAuthenticatedFetch({
+      projectUrl: config.supabaseUrl,
+      getToken: () => activeSessionToken,
+      onDiagnostic: (diagnostic) => {
+        lastPostgrestDiagnostic = diagnostic;
+        console.error("Supabase PostgREST safe response:", JSON.stringify(diagnostic));
+      },
+    });
     supabase = createClient(config.supabaseUrl, config.supabaseAnonKey, {
       auth: {
         flowType: "implicit",
@@ -64,48 +105,195 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         autoRefreshToken: true,
         detectSessionInUrl: true,
       },
+      global: { fetch: authenticatedFetch },
     });
-    await refreshSessionAndState();
-    if (authReturn.present) cleanAuthReturnUrl();
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      console.info("Supabase auth event:", { event, hasSession: Boolean(session), initializationComplete });
+      if (!initializationComplete) {
+        initialAuthEvent = { event, hasSession: Boolean(session) };
+        resolveInitialAuthEvent(initialAuthEvent);
+        return;
+      }
       if (!["SIGNED_IN", "SIGNED_OUT", "TOKEN_REFRESHED", "USER_UPDATED"].includes(event)) return;
-      queueMicrotask(async () => {
+      window.setTimeout(async () => {
         try {
-          if (session) await loadPrivateState(session);
+          if (session) await loadPrivateStateWithRecovery(session);
           else state = testState();
         } catch (error) {
-          state = testState({ connectionStatus: "error", connectionError: friendlyError(error) });
+          console.error("Supabase private state load failed after auth event:", safeError(error));
+          state = testState({
+            connectionStatus: "error",
+            connectionError: `La sesión está iniciada, pero no se pudieron cargar los datos privados: ${friendlyDataLoadError(error)}`,
+            authDiagnostics: diagnosticState("private_data", event, Boolean(session), error),
+          });
         }
         commit();
-      });
+      }, 0);
     });
     authSubscription = data.subscription;
+    await initializeSession();
+    initializationComplete = true;
   } catch (error) {
-    console.error("Supabase authentication initialization failed:", error);
-    if (authReturn.present) cleanAuthReturnUrl();
-    state = testState({ connectionStatus: "error", connectionError: friendlyError(error) });
+    initializationComplete = true;
+    console.error("Supabase authentication initialization failed:", safeError(error));
+    state = testState({
+      connectionStatus: "error",
+      connectionError: friendlyError(error),
+      authDiagnostics: {
+        stage: error?.stage || "initialization",
+        event: initialAuthEvent.event,
+        hasSession: Boolean(error?.hasSession || initialAuthEvent.hasSession),
+        code: error?.code || "unknown",
+      },
+    });
   }
 
   function cleanAuthReturnUrl() {
     window.history.replaceState({}, document.title, cleanAuthReturnHref(window.location.href));
   }
 
-  async function refreshSessionAndState() {
+  async function initializeSession() {
+    console.info("Supabase callback detected:", {
+      present: authReturn.present,
+      hasError: Boolean(authReturn.error),
+      errorCode: authReturn.errorCode || null,
+      hasHash: Boolean(window.location.hash),
+      hasCode: new URL(window.location.href).searchParams.has("code"),
+    });
     const { data, error } = await supabase.auth.getSession();
-    if (error) throw error;
+    console.info("Supabase getSession after callback:", { ok: !error, hasSession: Boolean(data?.session), errorCode: error?.code || error?.status || null });
+    if (error) throw authStageError(error, "get_session", false);
     if (authReturn.error) {
       const returnError = new Error(authReturn.error.replace(/\+/g, " "));
       returnError.code = authReturn.errorCode;
-      throw returnError;
+      throw authStageError(returnError, "callback_error", false);
     }
-    if (authReturn.present && !data.session) {
-      throw new Error("El enlace de acceso no ha creado una sesión válida. Solicita uno nuevo.");
+    let session = data.session;
+    if (authReturn.present && !session) {
+      await Promise.race([initialAuthEventPromise, new Promise((resolve) => window.setTimeout(resolve, 2500))]);
+      const retry = await supabase.auth.getSession();
+      console.info("Supabase getSession callback retry:", { ok: !retry.error, hasSession: Boolean(retry.data?.session), event: initialAuthEvent.event });
+      if (retry.error) throw authStageError(retry.error, "get_session_retry", false);
+      session = retry.data.session;
     }
+    if (authReturn.present && !session) {
+      const callbackError = new Error("auth_callback_without_session");
+      callbackError.code = "auth_callback_without_session";
+      throw authStageError(callbackError, "callback_session", false);
+    }
+    if (!session) {
+      state = testState();
+      return;
+    }
+    try {
+      await loadPrivateStateWithRecovery(session);
+    } catch (privateError) {
+      console.error("Supabase private state load failed:", safeError(privateError));
+      if (authReturn.present) cleanAuthReturnUrl();
+      state = testState({
+        connectionStatus: "error",
+        connectionError: `La sesión está iniciada, pero no se pudieron cargar los datos privados: ${friendlyDataLoadError(privateError)}`,
+        authDiagnostics: diagnosticState("private_data", initialAuthEvent.event, true, privateError),
+      });
+      return;
+    }
+    if (authReturn.present) cleanAuthReturnUrl();
+  }
+
+  async function refreshSessionAndState() {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
     if (!data.session) {
       state = testState();
       return;
     }
-    await loadPrivateState(data.session);
+    await loadPrivateStateWithRecovery(data.session);
+  }
+
+  function authStageError(error, stage, hasSession) {
+    error.stage = stage;
+    error.hasSession = hasSession;
+    return error;
+  }
+
+  function safeError(error) {
+    return {
+      name: error?.name || "Error",
+      code: error?.code || error?.status || "unknown",
+      message: error?.message || "unknown",
+      details: error?.details || null,
+      hint: error?.hint || null,
+    };
+  }
+
+  function safeSession(session) {
+    let claims = {};
+    try {
+      const payload = session?.access_token?.split(".")?.[1];
+      if (payload) claims = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    } catch {
+      claims = {};
+    }
+    let header = {};
+    try {
+      const encodedHeader = session?.access_token?.split(".")?.[0];
+      if (encodedHeader) header = JSON.parse(atob(encodedHeader.replace(/-/g, "+").replace(/_/g, "/")));
+    } catch {
+      header = {};
+    }
+    const result = {
+      userId: session?.user?.id || null,
+      email: session?.user?.email || null,
+      subjectMatches: Boolean(session?.user?.id && claims.sub === session.user.id),
+      role: claims.role || null,
+      audience: claims.aud || null,
+      issuerHost: claims.iss ? new URL(claims.iss).host : null,
+      expiresAt: claims.exp || null,
+      expired: claims.exp ? claims.exp <= Math.floor(Date.now() / 1000) : null,
+      algorithm: header.alg || null,
+      projectMatches: claims.iss ? new URL(claims.iss).host === new URL(config.supabaseUrl).host : false,
+    };
+    lastSafeSession = result;
+    return result;
+  }
+
+  function diagnosticState(stage, event, hasSession, error) {
+    return {
+      stage,
+      event,
+      hasSession,
+      code: error?.code || "unknown",
+      projectMatches: lastSafeSession?.projectMatches ?? null,
+      jwtRole: lastSafeSession?.role || null,
+      jwtExpired: lastSafeSession?.expired ?? null,
+      jwtAlgorithm: lastSafeSession?.algorithm || null,
+      postgrest: lastPostgrestDiagnostic,
+    };
+  }
+
+  async function loadPrivateStateWithRecovery(session) {
+    activeSessionToken = session.access_token || "";
+    const identity = await supabase.auth.getUser(session.access_token);
+    if (identity.error) throw identity.error;
+    if (identity.data.user?.id !== session.user.id) throw new Error("La identidad de la sesión no coincide con el usuario autenticado.");
+    console.info("Supabase verified session:", safeSession(session));
+    try {
+      await loadPrivateState(session);
+    } catch (error) {
+      if (error?.code !== "PGRST303") throw error;
+      console.warn("Supabase private data rejected session claims; refreshing once:", {
+        code: error.code,
+        message: error.message,
+        session: safeSession(session),
+      });
+      const refreshed = await supabase.auth.refreshSession();
+      if (refreshed.error || !refreshed.data.session) throw refreshed.error || error;
+      activeSessionToken = refreshed.data.session.access_token || "";
+      const refreshedIdentity = await supabase.auth.getUser(refreshed.data.session.access_token);
+      if (refreshedIdentity.error) throw refreshedIdentity.error;
+      console.info("Supabase refreshed verified session:", safeSession(refreshed.data.session));
+      await loadPrivateState(refreshed.data.session);
+    }
   }
 
   async function loadPrivateState(session) {
@@ -394,8 +582,16 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     if (/expired|otp_expired/i.test(message)) return "El enlace de acceso ha caducado. Solicita uno nuevo.";
     if (/invalid|no ha creado una sesión válida/i.test(message)) return "El enlace de acceso no es válido o ya se ha utilizado. Solicita uno nuevo.";
     if (/pkce code verifier/i.test(message)) return "No se pudo restaurar la sesión del enlace. Solicita uno nuevo y ábrelo en este mismo navegador.";
+    if (/auth_callback_without_session/i.test(message)) return "Supabase devolvió el enlace, pero no creó ninguna sesión. El retorno se ha conservado para poder diagnosticarlo.";
     if (/vinculacion|familia autorizada/i.test(message)) return "Tu usuario existe, pero todavía no está vinculado a una familia autorizada.";
     return "No se pudo preparar el acceso. Vuelve a intentarlo en unos minutos.";
+  }
+
+  function friendlyDataLoadError(error) {
+    if (error?.code === "42703") return "el esquema remoto no contiene una columna esperada.";
+    if (error?.code === "PGRST202") return "Supabase todavía no reconoce una función de Fase D.";
+    if (error?.code === "42501") return "los permisos RLS han rechazado una consulta necesaria.";
+    return translateDataError(error, "se produjo un error de lectura en Supabase.");
   }
 
   function commit() {
@@ -518,6 +714,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         const { error } = await supabase.auth.signOut();
         if (error) throw error;
       }
+      activeSessionToken = "";
       state = testState();
       commit();
     },

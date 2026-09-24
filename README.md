@@ -4,9 +4,9 @@ Aplicacion nueva para la plataforma comun modular de Training Kids, Football Aca
 
 ## Estado
 
-Fase C conectada al proyecto Supabase de pruebas. El modo demo conserva `localStorage` y el codigo `123456`. El modo test usa Supabase Auth, sesion persistente, roles y lectura remota de familia, hijos, inscripciones, grupos, documentos y pagos. La vinculacion de usuarios y las comprobaciones RLS se ejecutaron correctamente. Solo queda pendiente la comprobacion visual del usuario administrador cuando finalice el limite temporal de emails de Supabase.
+Fase C conectada al proyecto Supabase de pruebas. El modo demo conserva `localStorage` y el codigo `123456`. El modo test usa Supabase Auth, sesion persistente, roles y datos remotos. La vinculacion de usuarios, las comprobaciones RLS y el acceso visual familiar y administrativo se verificaron correctamente.
 
-Fase D incorpora escrituras mediante RPC protegidas para datos familiares, hijos, salud, emergencia, solicitudes y revision administrativa. La migracion nueva esta preparada pero no se ha ejecutado remotamente; hasta aplicarla no se consideran verificadas estas operaciones y nunca se hace fallback a demo. Consulta `docs/FASE_D_OPERATIVA.md`.
+Fase D incorpora escrituras mediante RPC protegidas para datos familiares, hijos, salud, emergencia, solicitudes y revision administrativa. La migracion se aplico en el proyecto de pruebas. Se verificaron remotamente las escrituras familiares, la persistencia, el envio idempotente de solicitudes y el acceso administrativo, siempre sin fallback a demo. Consulta `docs/FASE_D_OPERATIVA.md`.
 
 Fase C.1 usa temporalmente un magic link enviado por correo en modo test, compatible con la plantilla predeterminada de Supabase. La aplicacion estatica usa el flujo implicito del cliente oficial, procesa el retorno antes de limpiar la URL y conserva la sesion local. El retorno se realiza en `http://127.0.0.1:4181/?mode=test` y el reenvio queda bloqueado durante 60 segundos. El codigo OTP queda pendiente hasta disponer de SMTP corporativo.
 
@@ -156,7 +156,7 @@ Archivos principales:
 - `supabase/migrations/202609180001_link_test_users_and_verify_rls.sql`: correccion idempotente, vinculacion de los dos usuarios de prueba y verificaciones RLS.
 - `docs/FASE_C_SUPABASE_TEST.md`: pasos para crear el proyecto y conectar la app.
 - `docs/FASE_C1_OTP_CONFIGURACION.md`: mejora futura para activar OTP cuando exista SMTP corporativo.
-- `supabase/migrations/202609230001_phase_d_family_operations.sql`: RPC y permisos de escritura de Fase D, pendiente de ejecucion manual.
+- `supabase/migrations/202609230001_phase_d_family_operations.sql`: RPC y permisos de escritura de Fase D, aplicada en pruebas.
 - `supabase/functions/prepare-family-access/index.ts`: backend seguro preparado y aun no desplegado para altas familiares.
 - `docs/FASE_D_OPERATIVA.md`: roles, flujos, estado verificado y paso manual.
 

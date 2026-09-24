@@ -2,7 +2,7 @@
 
 ## Estado
 
-Implementacion local terminada. Las lecturas existentes de Supabase siguen operativas. Las escrituras de Fase D quedan pendientes de aplicar y verificar remotamente mediante la migracion `202609230001_phase_d_family_operations.sql`.
+La migracion `202609230001_phase_d_family_operations.sql` fue aplicada correctamente en el proyecto Supabase de pruebas. El modo test carga datos remotos sin fallback a demo y el modo demo permanece aislado.
 
 ## Roles y permisos
 
@@ -39,28 +39,32 @@ La funcion no esta desplegada y su accion no se muestra en la interfaz. El acces
 
 ## Migracion nueva
 
-La migracion anade el estado de revision, crea RPC transaccionales, valida catalogo y relaciones, y revoca escrituras directas sensibles. No modifica migraciones ejecutadas, no contiene datos reales y no se ejecuta automaticamente.
+La migracion anade el estado de revision, crea RPC transaccionales, valida catalogo y relaciones, y revoca escrituras directas sensibles. No contiene datos reales y no debe volver a ejecutarse ni modificarse.
 
 Las pruebas negativas remotas estan preparadas en `supabase/tests/phase_d_rls.sql`; usan marcadores y deben ejecutarse dentro de una transaccion con datos ficticios.
 
 ## Estado funcional
 
-### Completado y verificado localmente
+### Completado y verificado
 
 - Sintaxis, callback de Auth y contratos de seguridad.
 - Arranque demo y test sin fallback.
 - Gestion demo sin regresiones.
 - Vistas familiar y administrativa sobre el diseno existente.
 - Ausencia de secretos en Git y `config.local.js` ignorado.
+- Acceso familiar real, persistencia y cierre de sesion.
+- Identidad familiar vinculada solo a su familia.
+- Actualizacion remota de telefono y direccion familiar con datos ficticios.
+- Creacion remota de un hijo ficticio y guardado de salud y emergencia.
+- Solicitud remota de Training Kids y reenvio idempotente sin duplicados.
+- Acceso administrativo real y resolucion del rol `admin`.
+- La vinculacion de usuarios y las pruebas RLS transaccionales de Fase C finalizaron con `Fase C vinculada y RLS verificada`.
+- El contrato de seguridad de Fase D comprueba RPC, revocaciones, identidad derivada de `auth.uid()`, tarifa no administrativa y autorizacion de administrador.
 
-### Implementado, pendiente de verificacion remota
+### Pendiente de comprobacion manual final
 
-- Actualizar familia.
-- Crear y editar hijos, salud y emergencia.
-- Enviar una solicitud sin duplicados.
-- Aprobar, rechazar o solicitar cambios.
-- Ver el estado actualizado tras refrescar.
-- Pruebas negativas de nuevas escrituras y aislamiento.
+- Ejecutar desde el panel administrativo una decision sobre la solicitud ficticia y comprobar el cambio desde la familia.
+- Repetir las pruebas negativas remotas especificas de las RPC de Fase D solo si se aprueba previamente una ejecucion SQL transaccional adicional.
 - Despliegue de la funcion segura para nuevas familias.
 
 ### Simulado o posterior
@@ -69,6 +73,6 @@ Las pruebas negativas remotas estan preparadas en `supabase/tests/phase_d_rls.sq
 - SMTP, dominio, emails de produccion y despliegue publico.
 - Football Academy sigue en prealta y Gym Home como futuro.
 
-## Unica accion manual inmediata
+## Incidencia PGRST303
 
-Ejecutar en el SQL Editor de pruebas el contenido completo de `supabase/migrations/202609230001_phase_d_family_operations.sql`. Despues deben realizarse las pruebas remotas de familia, administracion y RLS antes de considerar completada la fase.
+El cliente Auth validaba la identidad, pero la primera peticion PostgREST podia conservar la publishable key como cabecera `Authorization`. El adaptador mantiene una sola instancia de Supabase y fuerza el JWT de sesion exclusivamente en peticiones al `/rest/v1` del mismo proyecto. El diagnostico registra solo estado HTTP, codigo, mensaje, tipo de cabecera y coincidencia de proyecto; nunca registra tokens. La regresion queda cubierta por `tests/postgrest-auth-header.test.mjs`.

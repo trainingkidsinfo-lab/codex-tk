@@ -13,9 +13,9 @@ import {
 } from "./data/mock-data.js?v=13";
 import { loadAppConfig } from "./data/app-config.js";
 import { createLocalDataAdapter } from "./data/local-adapter.js?v=13";
-import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=4";
+import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=7";
 import { translateDataError } from "./data/errors.js?v=1";
-import { renderAuth, renderLoading } from "./areas/access.js?v=15";
+import { renderAuth, renderLoading } from "./areas/access.js?v=16";
 import { renderAdmin } from "./areas/admin.js?v=13";
 import { renderDesign } from "./areas/design.js?v=12";
 import { renderDocuments } from "./areas/documents.js?v=13";
@@ -296,7 +296,10 @@ async function saveTrainingEnrollment() {
     const season = state.remoteCatalog?.seasons?.find((item) => item.service === "training_kids");
     const child = getChild();
     if (!child || !state.selectedCenter || !plan || !season) return toast("Completa centro, temporada y tarifa antes de enviar.");
-    if (!window.confirm("¿Enviar esta solicitud a administración? Podrás ver su estado desde tu cuenta.")) return;
+    if (!state.enrollmentSubmitConfirmed) {
+      setState({ enrollmentSubmitConfirmed: true });
+      return;
+    }
     try {
       await adapter.submitEnrollment({
         playerId: child.id,
@@ -307,8 +310,10 @@ async function saveTrainingEnrollment() {
         planPriceId: plan.priceId,
         availability: child.availability || [],
       });
+      setState({ enrollmentSubmitConfirmed: false });
       toast("Solicitud enviada a administración.");
     } catch (error) {
+      setState({ enrollmentSubmitConfirmed: false });
       toast(translateDataError(error));
     }
     return;

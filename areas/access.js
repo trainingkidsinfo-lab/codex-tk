@@ -15,6 +15,7 @@ export function renderAuth({ state, testCode, appConfig }) {
         <h1>Acceso</h1>
         <p class="muted">${isSupabaseTest ? "Te enviaremos un enlace seguro para iniciar sesión. En este dispositivo mantendremos tu sesión iniciada." : "Introduce tu correo y usa el código temporal de prueba."}</p>
         ${state.connectionError ? `<div class="document-warning" role="alert">${escapeHtml(state.connectionError)}</div>` : ""}
+        ${state.authDiagnostics ? `<div class="validation-box" role="status"><strong>Diagnóstico seguro</strong><br>Etapa: ${escapeHtml(state.authDiagnostics.stage)} · Evento: ${escapeHtml(state.authDiagnostics.event)} · Sesión: ${state.authDiagnostics.hasSession ? "sí" : "no"} · Código: ${escapeHtml(state.authDiagnostics.code)}${state.authDiagnostics.projectMatches !== undefined ? `<br>Proyecto JWT: ${state.authDiagnostics.projectMatches ? "coincide" : "no coincide"} · Rol JWT: ${escapeHtml(state.authDiagnostics.jwtRole || "sin rol")} · Caducado: ${state.authDiagnostics.jwtExpired ? "sí" : "no"} · Algoritmo: ${escapeHtml(state.authDiagnostics.jwtAlgorithm || "desconocido")}` : ""}${state.authDiagnostics.postgrest ? `<br>PostgREST: HTTP ${escapeHtml(state.authDiagnostics.postgrest.status)} · ${escapeHtml(state.authDiagnostics.postgrest.authorization)} · ${escapeHtml(state.authDiagnostics.postgrest.message || "sin detalle")}` : ""}</div>` : ""}
         <div class="form-grid">
           <div class="field">
             <label for="email">Correo electrónico</label>
