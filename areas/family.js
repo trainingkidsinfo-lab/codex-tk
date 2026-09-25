@@ -199,7 +199,7 @@ function renderStatus({ state, child, services, centers, groups, trainingKidsPla
           </div>
           <h3>${familyStatusHeadline(summary)}</h3>
           <p class="muted">${summary.nextStep}</p>
-          ${enrollment.remote ? `<div class="badge-row"><span class="badge">Revisión: ${reviewLabel(enrollment.reviewStatus)}</span></div>${enrollment.reviewNotes ? `<div class="validation-box">${enrollment.reviewNotes}</div>` : ""}` : ""}
+          ${enrollment.remote || enrollment.reviewStatus ? `<div class="badge-row"><span class="badge">Revisión: ${reviewLabel(enrollment.reviewStatus)}</span></div>${enrollment.reviewNotes ? `<div class="validation-box">${enrollment.reviewNotes}</div>` : ""}` : ""}
           <ul class="small-list">
             <li><span>Plan</span><strong>${enrollment.planId ? planName(trainingKidsPlans, enrollment.planId) : "Pendiente"}</strong></li>
             <li><span>Documentos obligatorios</span><strong>${summary.requirements.documents.complete ? "Completados" : "Pendientes"}</strong></li>

@@ -16,10 +16,10 @@ import { createLocalDataAdapter } from "./data/local-adapter.js?v=13";
 import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=7";
 import { translateDataError } from "./data/errors.js?v=1";
 import { renderAuth, renderLoading } from "./areas/access.js?v=16";
-import { renderAdmin } from "./areas/admin.js?v=13";
+import { renderAdmin } from "./areas/admin.js?v=14";
 import { renderDesign } from "./areas/design.js?v=12";
 import { renderDocuments } from "./areas/documents.js?v=13";
-import { renderFamily } from "./areas/family.js?v=13";
+import { renderFamily } from "./areas/family.js?v=14";
 import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=12";
 import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=14";
 import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=13";
@@ -358,12 +358,30 @@ async function saveTrainingEnrollment() {
 }
 
 async function reviewEnrollment(enrollmentId, decision) {
-  if (!adapter.isRemote) return toast("Esta revisión real solo está disponible en modo test.");
-  const confirmation = decision === "approve" ? "¿Aprobar esta solicitud?" : decision === "reject" ? "¿Rechazar esta solicitud?" : "¿Solicitar cambios a la familia?";
-  if (!window.confirm(confirmation)) return;
   const state = getState();
   const groupId = decision === "approve" ? (state.adminGroupDrafts?.[enrollmentId] || null) : null;
-  const notes = state.adminReviewNotes?.[enrollmentId] || "";
+  const notes = String(state.adminReviewNotes?.[enrollmentId] || "").trim();
+  if (decision === "request_changes" && !notes) return toast("Escribe las observaciones que debe revisar la familia.");
+  const confirmation = decision === "approve" ? "¿Aprobar esta solicitud?" : decision === "reject" ? "¿Rechazar esta solicitud?" : "¿Solicitar cambios a la familia?";
+  if (!window.confirm(confirmation)) return;
+  if (!adapter.isRemote) {
+    adapter.mutate((draft) => {
+      const enrollment = draft.enrollments.find((item) => item.id === enrollmentId);
+      if (!enrollment) return;
+      enrollment.reviewStatus = decision === "request_changes" ? "changes_requested" : decision === "reject" ? "rejected" : "approved";
+      enrollment.reviewNotes = notes;
+      const child = draft.family.children.find((item) => item.id === enrollment.childId);
+      draft.audit.unshift({
+        id: `a-${Date.now()}`,
+        date: new Date().toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" }),
+        actor: "Administración",
+        action: decision === "request_changes" ? `Cambios solicitados para ${child?.name || "inscripción"}: ${notes}` : `Solicitud ${decision}`,
+        service: enrollment.service === "training_kids" ? "Training Kids" : "Football Academy",
+      });
+    });
+    toast(decision === "request_changes" ? "Cambios solicitados a la familia." : "Revisión simulada guardada.");
+    return;
+  }
   try {
     await adapter.reviewEnrollment(enrollmentId, decision, groupId, notes);
     toast(decision === "approve" ? "Solicitud aprobada." : decision === "reject" ? "Solicitud rechazada." : "Cambios solicitados.");
