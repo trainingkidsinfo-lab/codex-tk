@@ -134,12 +134,12 @@ function renderEnrollmentAdmin({ summary, enrollment, state, services, centers, 
         <div class="field"><label for="review-note-${enrollment.id}">Observaciones para la familia</label><textarea id="review-note-${enrollment.id}" onchange="setAdminReviewNote('${enrollment.id}', this.value)" placeholder="Indica claramente qué debe revisar o completar">${escapeHtml(state.adminReviewNotes?.[enrollment.id] || enrollment.reviewNotes || "")}</textarea></div>
         <div class="actions">
           ${state.appMode === "test" ? `
-            <button class="button" onclick="reviewEnrollment('${enrollment.id}','approve')" ${state.saveState === "saving" ? "disabled" : ""}>Aprobar solicitud</button>
-            <button class="button ghost" onclick="reviewEnrollment('${enrollment.id}','request_changes')" ${state.saveState === "saving" ? "disabled" : ""}>Solicitar cambios</button>
-            <button class="button ghost" onclick="reviewEnrollment('${enrollment.id}','reject')" ${state.saveState === "saving" ? "disabled" : ""}>Rechazar</button>
+            <button type="button" class="button" data-review-decision="approve" onclick="approveEnrollment('${enrollment.id}')" ${state.saveState === "saving" ? "disabled" : ""}>Aprobar solicitud</button>
+            <button type="button" class="button ghost" data-review-decision="request_changes" onclick="requestEnrollmentChanges('${enrollment.id}')" ${state.saveState === "saving" ? "disabled" : ""}>Solicitar cambios</button>
+            <button type="button" class="button ghost" data-review-decision="reject" onclick="rejectEnrollment('${enrollment.id}')" ${state.saveState === "saving" ? "disabled" : ""}>Rechazar</button>
           ` : ""}
           ${state.appMode === "demo" ? `
-            <button class="button ghost" onclick="reviewEnrollment('${enrollment.id}','request_changes')">Solicitar cambios</button>
+            <button type="button" class="button ghost" data-review-decision="request_changes" onclick="requestEnrollmentChanges('${enrollment.id}')">Solicitar cambios</button>
             <button class="button" ${summary.status === "ready" ? "" : "disabled"} onclick="activateEnrollment('${enrollment.id}')">Activar</button>
             <button class="button ghost" ${summary.status === "active" ? "" : "disabled"} onclick="withdrawEnrollment('${enrollment.id}')">Dar de baja</button>
           ` : ""}

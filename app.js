@@ -20,6 +20,7 @@ import { renderAdmin } from "./areas/admin.js?v=14";
 import { renderDesign } from "./areas/design.js?v=12";
 import { renderDocuments } from "./areas/documents.js?v=13";
 import { renderFamily } from "./areas/family.js?v=14";
+import { getEnrollmentReview } from "./areas/enrollment-review.js?v=1";
 import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=12";
 import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=14";
 import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=13";
@@ -358,36 +359,54 @@ async function saveTrainingEnrollment() {
 }
 
 async function reviewEnrollment(enrollmentId, decision) {
+  let review;
+  try {
+    review = getEnrollmentReview(decision);
+  } catch (error) {
+    console.error("Decisión administrativa rechazada:", { decision, message: error.message });
+    return toast("La acción administrativa no es válida. Recarga la aplicación.");
+  }
   const state = getState();
-  const groupId = decision === "approve" ? (state.adminGroupDrafts?.[enrollmentId] || null) : null;
+  const groupId = review.remoteDecision === "approve" ? (state.adminGroupDrafts?.[enrollmentId] || null) : null;
   const notes = String(state.adminReviewNotes?.[enrollmentId] || "").trim();
-  if (decision === "request_changes" && !notes) return toast("Escribe las observaciones que debe revisar la familia.");
-  const confirmation = decision === "approve" ? "¿Aprobar esta solicitud?" : decision === "reject" ? "¿Rechazar esta solicitud?" : "¿Solicitar cambios a la familia?";
-  if (!window.confirm(confirmation)) return;
+  if (review.requiresNotes && !notes) return toast("Escribe las observaciones que debe revisar la familia.");
+  if (!window.confirm(review.confirmation)) return;
   if (!adapter.isRemote) {
     adapter.mutate((draft) => {
       const enrollment = draft.enrollments.find((item) => item.id === enrollmentId);
       if (!enrollment) return;
-      enrollment.reviewStatus = decision === "request_changes" ? "changes_requested" : decision === "reject" ? "rejected" : "approved";
+      enrollment.reviewStatus = review.reviewStatus;
       enrollment.reviewNotes = notes;
       const child = draft.family.children.find((item) => item.id === enrollment.childId);
       draft.audit.unshift({
         id: `a-${Date.now()}`,
         date: new Date().toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" }),
         actor: "Administración",
-        action: decision === "request_changes" ? `Cambios solicitados para ${child?.name || "inscripción"}: ${notes}` : `Solicitud ${decision}`,
+        action: review.remoteDecision === "request_changes" ? `Cambios solicitados para ${child?.name || "inscripción"}: ${notes}` : `Solicitud ${review.remoteDecision}`,
         service: enrollment.service === "training_kids" ? "Training Kids" : "Football Academy",
       });
     });
-    toast(decision === "request_changes" ? "Cambios solicitados a la familia." : "Revisión simulada guardada.");
+    toast(review.successMessage);
     return;
   }
   try {
-    await adapter.reviewEnrollment(enrollmentId, decision, groupId, notes);
-    toast(decision === "approve" ? "Solicitud aprobada." : decision === "reject" ? "Solicitud rechazada." : "Cambios solicitados.");
+    await adapter.reviewEnrollment(enrollmentId, review.remoteDecision, groupId, notes);
+    toast(review.successMessage);
   } catch (error) {
     toast(translateDataError(error));
   }
+}
+
+function approveEnrollment(enrollmentId) {
+  return reviewEnrollment(enrollmentId, "approve");
+}
+
+function requestEnrollmentChanges(enrollmentId) {
+  return reviewEnrollment(enrollmentId, "request_changes");
+}
+
+function rejectEnrollment(enrollmentId) {
+  return reviewEnrollment(enrollmentId, "reject");
 }
 
 function setAdminGroupDraft(enrollmentId, groupId) {
@@ -1194,6 +1213,9 @@ window.selectService = selectService;
 window.saveTrainingEnrollment = saveTrainingEnrollment;
 window.assignGroup = assignGroup;
 window.reviewEnrollment = reviewEnrollment;
+window.approveEnrollment = approveEnrollment;
+window.requestEnrollmentChanges = requestEnrollmentChanges;
+window.rejectEnrollment = rejectEnrollment;
 window.setAdminGroupDraft = setAdminGroupDraft;
 window.setAdminReviewNote = setAdminReviewNote;
 window.activateEnrollment = activateEnrollment;
