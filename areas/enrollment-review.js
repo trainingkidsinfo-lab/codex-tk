@@ -3,6 +3,7 @@ export const ENROLLMENT_REVIEW = Object.freeze({
     remoteDecision: "approve",
     reviewStatus: "approved",
     confirmation: "¿Aprobar esta solicitud?",
+    detail: "Se registrará la aprobación y, si has elegido grupo, su asignación.",
     successMessage: "Solicitud aprobada.",
     requiresNotes: false,
   }),
@@ -10,6 +11,7 @@ export const ENROLLMENT_REVIEW = Object.freeze({
     remoteDecision: "request_changes",
     reviewStatus: "changes_requested",
     confirmation: "¿Solicitar cambios a la familia?",
+    detail: "La familia verá tus observaciones en el estado de la solicitud.",
     successMessage: "Cambios solicitados a la familia.",
     requiresNotes: true,
   }),
@@ -17,13 +19,13 @@ export const ENROLLMENT_REVIEW = Object.freeze({
     remoteDecision: "reject",
     reviewStatus: "rejected",
     confirmation: "¿Rechazar esta solicitud?",
+    detail: "La solicitud quedará cerrada como baja.",
     successMessage: "Solicitud rechazada.",
     requiresNotes: false,
   }),
 });
 
 export function getEnrollmentReview(decision) {
-  const review = ENROLLMENT_REVIEW[decision];
-  if (!review) throw new Error(`Decisión administrativa no válida: ${decision}`);
-  return review;
+  if (!Object.hasOwn(ENROLLMENT_REVIEW, decision)) throw new Error(`Decisión administrativa no válida: ${decision}`);
+  return ENROLLMENT_REVIEW[decision];
 }

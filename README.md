@@ -10,6 +10,18 @@ Fase D incorpora escrituras mediante RPC protegidas para datos familiares, hijos
 
 Fase C.1 usa temporalmente un magic link enviado por correo en modo test, compatible con la plantilla predeterminada de Supabase. La aplicacion estatica usa el flujo implicito del cliente oficial, procesa el retorno antes de limpiar la URL y conserva la sesion local. El retorno se realiza en `http://127.0.0.1:4181/?mode=test` y el reenvio queda bloqueado durante 60 segundos. El codigo OTP queda pendiente hasta disponer de SMTP corporativo.
 
+Fase E sanea el frontend sin tocar Supabase: escapado sistematico de datos en plantillas, confirmacion en pagina para las decisiones administrativas, retirada de plantillas documentales obsoletas, `supabase-js` con version exacta y pruebas nuevas. Consulta `docs/FASE_E_SANEAMIENTO.md`.
+
+## Pruebas
+
+Con Node 20 o superior:
+
+```bash
+npm test
+```
+
+No requiere instalar dependencias.
+
 ## Como abrir
 
 Desde esta carpeta:
@@ -73,6 +85,7 @@ tk-platform-v1/
     design.js
   ui/
     shared.js
+    escape.js
   assets/
   docs/
 ```
@@ -90,6 +103,7 @@ tk-platform-v1/
 - `areas/gym-home.js`: modulo futuro, sin contratacion ni reservas en esta fase.
 - `areas/documents.js`: area documental y firma simulada preparada para adaptador real.
 - `ui/shared.js`: piezas comunes reutilizables como cabecera, nombres, tarjetas de grupo y avisos.
+- `ui/escape.js`: escapado obligatorio para cualquier dato insertado en plantillas HTML (`escapeHtml`) o en manejadores inline (`jsArg`).
 
 ## Conectado en modo test
 
@@ -141,7 +155,7 @@ El flujo documental queda separado en pasos visibles: completar datos, revisar d
 
 La revision del contrato se realiza pagina a pagina dentro de la app para poder validar el final del documento sin depender del visor PDF del navegador. La app tambien ofrece ver y descargar el PDF generado. Al firmar, se conserva una copia local fija con datos, firma, version, aceptaciones, respuestas PAR-Q y hash SHA-256 del PDF local cuando el navegador lo permite.
 
-La autorizacion de imagen queda como documento independiente con decision explicita de autorizar o no autorizar, sin casilla premarcada y sin bloquear la inscripcion. Normativa y garantias sigue como lectura/descarga y aceptacion sin firma dibujada. SEPA y las fichas duplicadas de salud/emergencia quedan fuera del flujo actual, conservando historico si existieran copias firmadas.
+La autorizacion de imagen queda como documento independiente con decision explicita de autorizar o no autorizar, sin casilla premarcada y sin bloquear la inscripcion. Normativa y garantias es solo lectura y descarga, sin aceptacion ni firma. SEPA, las fichas duplicadas de salud/emergencia y el contrato anual se retiraron del codigo en la Fase E; el adaptador local sigue archivando copias antiguas que existan en `localStorage`.
 
 ## Fase C Supabase test
 

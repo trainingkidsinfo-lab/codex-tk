@@ -10,22 +10,22 @@ import {
   stepLabels,
   steps,
   trainingKidsPlans,
-} from "./data/mock-data.js?v=13";
-import { loadAppConfig } from "./data/app-config.js";
-import { createLocalDataAdapter } from "./data/local-adapter.js?v=13";
-import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=7";
-import { translateDataError } from "./data/errors.js?v=1";
-import { renderAuth, renderLoading } from "./areas/access.js?v=16";
-import { renderAdmin } from "./areas/admin.js?v=14";
-import { renderDesign } from "./areas/design.js?v=12";
-import { renderDocuments } from "./areas/documents.js?v=13";
-import { renderFamily } from "./areas/family.js?v=14";
-import { getEnrollmentReview } from "./areas/enrollment-review.js?v=1";
-import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=12";
-import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=14";
-import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=13";
-import { renderAdminPayments, renderPayments } from "./areas/payments.js?v=12";
-import { appChrome, serviceName, toast } from "./ui/shared.js?v=12";
+} from "./data/mock-data.js?v=e1";
+import { loadAppConfig } from "./data/app-config.js?v=e1";
+import { createLocalDataAdapter } from "./data/local-adapter.js?v=e1";
+import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=e1";
+import { translateDataError } from "./data/errors.js?v=e1";
+import { renderAuth, renderLoading } from "./areas/access.js?v=e1";
+import { renderAdmin } from "./areas/admin.js?v=e1";
+import { renderDesign } from "./areas/design.js?v=e1";
+import { renderDocuments } from "./areas/documents.js?v=e1";
+import { renderFamily } from "./areas/family.js?v=e1";
+import { getEnrollmentReview } from "./areas/enrollment-review.js?v=e1";
+import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=e1";
+import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=e1";
+import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=e1";
+import { renderPayments } from "./areas/payments.js?v=e1";
+import { appChrome, serviceName, toast } from "./ui/shared.js?v=e1";
 
 const appConfig = loadAppConfig();
 const adapter = appConfig.isSupabaseTest
@@ -367,10 +367,17 @@ async function reviewEnrollment(enrollmentId, decision) {
     return toast("La acción administrativa no es válida. Recarga la aplicación.");
   }
   const state = getState();
-  const groupId = review.remoteDecision === "approve" ? (state.adminGroupDrafts?.[enrollmentId] || null) : null;
   const notes = String(state.adminReviewNotes?.[enrollmentId] || "").trim();
   if (review.requiresNotes && !notes) return toast("Escribe las observaciones que debe revisar la familia.");
-  if (!window.confirm(review.confirmation)) return;
+  adapter.setState({ pendingAdminAction: { type: "review", enrollmentId, decision: review.remoteDecision } });
+}
+
+async function applyEnrollmentReview(enrollmentId, decision) {
+  const review = getEnrollmentReview(decision);
+  const state = getState();
+  const groupId = review.remoteDecision === "approve" ? (state.adminGroupDrafts?.[enrollmentId] || null) : null;
+  const notes = String(state.adminReviewNotes?.[enrollmentId] || "").trim();
+  adapter.setState({ pendingAdminAction: null });
   if (!adapter.isRemote) {
     adapter.mutate((draft) => {
       const enrollment = draft.enrollments.find((item) => item.id === enrollmentId);
@@ -460,6 +467,10 @@ function confirmAdminAction() {
   const state = getState();
   const action = state.pendingAdminAction;
   if (!action) return;
+  if (action.type === "review") {
+    applyEnrollmentReview(action.enrollmentId, action.decision);
+    return;
+  }
   if (action.type === "activate") {
     applyEnrollmentActivation(action.enrollmentId);
     return;
@@ -607,9 +618,7 @@ function ensureTrainingKidsDocuments(state, enrollment) {
 function documentSetup(template) {
   if (template.id === "tk-service-terms") return { status: "pending_complete", required: true, validationNote: "" };
   if (template.id === "tk-norms-guarantees") return { status: "info", required: false, validationNote: "" };
-  if (template.id === "tk-sepa-mandate") return { status: "not_applicable", required: false, validationNote: "" };
   if (template.id === "tk-image-rights") return { status: "pending_signature", required: false, validationNote: "" };
-  if (["tk-medical-info", "tk-emergency-contact"].includes(template.id)) return { status: "pending_complete", required: true, validationNote: "" };
   return { status: "not_applicable", required: false, validationNote: "" };
 }
 
@@ -1037,68 +1046,14 @@ function confirmSimulatedSignature(documentId) {
 function syncSharedChildDataFromDocument(state, doc, fieldValues = {}) {
   const child = state.family.children.find((item) => item.id === doc.childId);
   if (!child) return;
-  if (doc.templateId === "tk-medical-info" && fieldValues.medicalInfo?.value) child.medical = fieldValues.medicalInfo.value;
   if (doc.templateId === "tk-service-terms" && fieldValues.medicalAdditional?.value) {
     child.medical = fieldValues.medicalAdditional.value;
-  }
-  if (doc.templateId === "tk-emergency-contact") {
-    if (fieldValues.emergencyName?.value) child.emergencyName = fieldValues.emergencyName.value;
-    if (fieldValues.emergencyPhone?.value) child.emergencyPhone = fieldValues.emergencyPhone.value;
   }
   if (doc.templateId === "tk-service-terms" && fieldValues.emergencySummary?.value) {
     const [name, phone] = fieldValues.emergencySummary.value.split(" - ");
     if (name?.trim()) child.emergencyName = name.trim();
     if (phone?.trim()) child.emergencyPhone = phone.trim();
   }
-}
-
-function acceptInformativeDocument(documentId) {
-  const stateBefore = getState();
-  const docBefore = stateBefore.documents.find((item) => item.id === documentId);
-  if (!docBefore) return toast("Documento no encontrado.");
-  if (!stateBefore.reviewedDocuments?.[documentId]) return showSignatureValidation("Revisa el documento completo antes de aceptar.");
-  adapter.mutate((state) => {
-    const doc = state.documents.find((item) => item.id === documentId);
-    if (!doc || doc.status === "signed") return;
-    const acceptedAt = new Date().toISOString();
-    const tutor = state.family.tutors.find((item) => item.canSign) || state.family.tutors[0];
-    doc.status = "accepted";
-    doc.signedAt = acceptedAt;
-    state.documentFlowSteps = { ...(state.documentFlowSteps || {}), [documentId]: "signed" };
-    doc.evidence = {
-      evidenceId: `EV-SIM-${Date.now()}`,
-      documentId: doc.id,
-      version: doc.version,
-      signerTutorId: tutor.id,
-      signerTutorName: tutor.name,
-      childId: doc.childId,
-      enrollmentId: doc.enrollmentId,
-      signedAt: acceptedAt,
-      status: "Aceptado",
-      acceptedConsents: ["lectura-completa", `version-${doc.version}`, "aceptacion-sin-firma-dibujada"],
-      documentHash: `SIM-ACCEPT-${Date.now()}`,
-      signatureName: tutor.name,
-      signatureDrawing: "",
-    };
-    doc.completedSnapshot = {
-      documentId: doc.id,
-      templateId: doc.templateId,
-      title: doc.title,
-      version: doc.version,
-      effectiveDate: doc.effectiveDate,
-      documentText: legalDocumentSources.find((source) => source.id === documentTemplates.find((template) => template.id === doc.templateId)?.sourceId)?.text || "",
-      fieldValues: {},
-      lockedAt: acceptedAt,
-    };
-    state.audit.unshift({
-      id: `a-${Date.now()}`,
-      date: new Date().toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" }),
-      actor: tutor.name,
-      action: `Lectura aceptada en ${doc.id}`,
-      service: serviceName(services, doc.service),
-    });
-  });
-  toast("Lectura aceptada localmente.");
 }
 
 function simulateTutor() {
@@ -1236,7 +1191,6 @@ window.drawSignature = drawSignature;
 window.endSignatureDraw = endSignatureDraw;
 window.clearSignaturePad = clearSignaturePad;
 window.confirmSimulatedSignature = confirmSimulatedSignature;
-window.acceptInformativeDocument = acceptInformativeDocument;
 window.simulateTutor = simulateTutor;
 window.simulateChild = simulateChild;
 

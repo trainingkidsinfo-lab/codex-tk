@@ -60,7 +60,7 @@ export function contractData({ document, state, centers, groups, trainingKidsPla
     email: fieldValue(draft, "email", state.family.email || tutor?.email || ""),
     service: "Training Kids",
     center: center ? `${center.name} - ${center.city}` : "Pendiente de centro",
-    group: group ? `${group.id} - ${group.day} ${group.time}` : "Pendiente de grupo",
+    group: group ? `${group.name} - ${group.day} ${group.time}` : "Pendiente de grupo",
     plan: plan ? `${plan.name} - ${plan.period}` : "Pendiente de tarifa",
     amount: plan ? `${plan.amount} EUR` : "Pendiente",
     period: plan?.period || "Pendiente",

@@ -1,7 +1,8 @@
-import { assertSupabaseConfig } from "./app-config.js";
-import { isUuid, translateDataError } from "./errors.js";
+import { assertSupabaseConfig } from "./app-config.js?v=e1";
+import { isUuid, translateDataError } from "./errors.js?v=e1";
 
-const SUPABASE_JS_URL = "https://esm.sh/@supabase/supabase-js@2";
+// Version exacta fijada (Fase E). Actualizar solo de forma deliberada y probada.
+const SUPABASE_JS_URL = "https://esm.sh/@supabase/supabase-js@2.103.0";
 const TEMPLATE_BY_CODE = {
   activity_contract: "tk-service-terms",
   image_authorization: "tk-image-rights",

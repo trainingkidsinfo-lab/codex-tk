@@ -1,5 +1,8 @@
+import { escapeHtml } from "./escape.js?v=e1";
+
 export function appChrome({ state, content }) {
   const canSeeAdmin = state.appMode === "demo" || state.session?.isAdmin;
+  const canSeeDesign = state.appMode === "demo" || state.session?.isAdmin;
   return `
     <div class="app-shell">
       <header class="topbar">
@@ -15,8 +18,8 @@ export function appChrome({ state, content }) {
             <button class="nav-button ${state.activeView === "documents" ? "active" : ""}" onclick="setState({activeView:'documents'})">Documentos</button>
             <button class="nav-button ${state.activeView === "payments" ? "active" : ""}" onclick="setState({activeView:'payments'})">Pagos</button>
             ${canSeeAdmin ? `<button class="nav-button ${state.activeView === "admin" ? "active" : ""}" onclick="setState({activeView:'admin'})">Admin</button>` : ""}
-            <button class="nav-button ${state.activeView === "design" ? "active" : ""}" onclick="setState({activeView:'design'})">Diseño</button>
-            <button class="icon-button" title="Salir" onclick="logout()">X</button>
+            ${canSeeDesign ? `<button class="nav-button ${state.activeView === "design" ? "active" : ""}" onclick="setState({activeView:'design'})">Diseño</button>` : ""}
+            <button class="icon-button" title="Cerrar sesión" aria-label="Cerrar sesión" onclick="logout()">X</button>
           </nav>
         </div>
       </header>
@@ -34,6 +37,7 @@ export function toast(message) {
   window.setTimeout(() => el.classList.remove("show"), 2600);
 }
 
+// Devuelven texto plano: escapar siempre en el punto de render.
 export function serviceName(services, serviceId) {
   return services.find((service) => service.id === serviceId)?.name || serviceId;
 }
@@ -57,7 +61,7 @@ export function childServices({ state, services, childId }) {
   if (!items.length) return `<span class="badge">Sin inscripciones</span>`;
   return items.map((enrollment) => {
     const tone = enrollment.service === "training_kids" ? "turquoise" : "yellow";
-    return `<span class="badge ${tone}">${serviceName(services, enrollment.service)}</span>`;
+    return `<span class="badge ${tone}">${escapeHtml(serviceName(services, enrollment.service))}</span>`;
   }).join("");
 }
 
@@ -67,13 +71,13 @@ export function renderGroupCard({ group, services, centers }) {
   return `
     <article class="group-card">
       <div class="badge-row">
-        <span class="badge ${group.service === "training_kids" ? "turquoise" : "yellow"}">${serviceName(services, group.service)}</span>
-        <span class="badge">${centerName(centers, group.centerId)}</span>
+        <span class="badge ${group.service === "training_kids" ? "turquoise" : "yellow"}">${escapeHtml(serviceName(services, group.service))}</span>
+        <span class="badge">${escapeHtml(centerName(centers, group.centerId))}</span>
       </div>
-      <h3>${group.id} · ${group.name}</h3>
-      <p class="muted">${group.day} · ${group.time}</p>
+      <h3>${escapeHtml(group.id)} · ${escapeHtml(group.name)}</h3>
+      <p class="muted">${escapeHtml(group.day)} · ${escapeHtml(group.time)}</p>
       <div class="capacity">
-        <div class="progress-head"><span>Capacidad</span><span>${group.occupied}/${group.capacity}</span></div>
+        <div class="progress-head"><span>Capacidad</span><span>${Number(group.occupied) || 0}/${Number(group.capacity) || 0}</span></div>
         <div class="capacity-line"><div class="capacity-fill ${cls}" style="width:${pct}%"></div></div>
       </div>
     </article>

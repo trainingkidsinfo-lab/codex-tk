@@ -1,7 +1,9 @@
-import { centerName, planName, serviceName } from "../ui/shared.js";
-import { renderAdminDocuments } from "./documents.js";
-import { getEnrollmentOperationalSummary, getGroupOccupancy } from "./operational-status.js?v=14";
-import { renderAdminPayments } from "./payments.js";
+import { centerName, planName, serviceName } from "../ui/shared.js?v=e1";
+import { escapeHtml, jsArg } from "../ui/escape.js?v=e1";
+import { renderAdminDocuments } from "./documents.js?v=e1";
+import { getEnrollmentReview } from "./enrollment-review.js?v=e1";
+import { getEnrollmentOperationalSummary, getGroupOccupancy } from "./operational-status.js?v=e1";
+import { renderAdminPayments } from "./payments.js?v=e1";
 
 export function renderAdmin({ state, services, centers, groups, trainingKidsPlans, documentTemplates, legalDocumentSources }) {
   const filter = state.adminServiceFilter;
@@ -18,14 +20,15 @@ export function renderAdmin({ state, services, centers, groups, trainingKidsPlan
   const filteredGroups = filter === "all" ? groups : groups.filter((item) => item.service === filter);
   const pendingCount = summaries.filter((item) => item.status === "pending" || item.status === "draft").length;
   const readyCount = summaries.filter((item) => item.status === "ready").length;
+  const childCount = (state.adminChildren || state.family.children).length;
 
   return `
     <section class="admin-layout">
-      <aside class="sidebar">
-        <button class="side-filter ${filter === "all" ? "active" : ""}" onclick="setState({adminServiceFilter:'all'})">Todos</button>
-        <button class="side-filter ${filter === "training_kids" ? "active" : ""}" onclick="setState({adminServiceFilter:'training_kids'})">Training Kids</button>
-        <button class="side-filter ${filter === "football_academy" ? "active" : ""}" onclick="setState({adminServiceFilter:'football_academy'})">Football Academy</button>
-        <button class="side-filter ${filter === "gym_home" ? "active" : ""}" onclick="setState({adminServiceFilter:'gym_home'})">Gym Home futuro</button>
+      <aside class="sidebar" aria-label="Filtrar por servicio">
+        ${serviceFilterButton("all", "Todos", filter)}
+        ${serviceFilterButton("training_kids", "Training Kids", filter)}
+        ${serviceFilterButton("football_academy", "Football Academy", filter)}
+        ${serviceFilterButton("gym_home", "Gym Home futuro", filter)}
       </aside>
       <div>
         <section class="hero-band">
@@ -42,20 +45,20 @@ export function renderAdmin({ state, services, centers, groups, trainingKidsPlan
         </section>
         <section class="section-title"><h2>Resumen</h2></section>
         <div class="stat-grid">
-          <div class="stat"><strong>${state.family.children.length}</strong><span class="muted">Hijos</span></div>
+          <div class="stat"><strong>${childCount}</strong><span class="muted">Hijos</span></div>
           <div class="stat"><strong>${pendingCount}</strong><span class="muted">Pendientes</span></div>
           <div class="stat"><strong>${readyCount}</strong><span class="muted">Listas</span></div>
           <div class="stat"><strong>${groups.filter((g) => getGroupOccupancy({ group: g, state }).full).length}</strong><span class="muted">Grupos llenos</span></div>
           <div class="stat"><strong>0</strong><span class="muted">Impagos reales</span></div>
         </div>
-        ${state.saveMessage ? `<div class="${state.saveState === "error" ? "document-warning" : "status-ok"}" role="status">${state.saveMessage}</div>` : ""}
+        ${state.saveMessage ? `<div class="${state.saveState === "error" ? "document-warning" : "status-ok"}" role="status">${escapeHtml(state.saveMessage)}</div>` : ""}
         <section class="section-title"><h2>Familias</h2></section>
-        <div class="field"><label for="admin-search">Buscar familia o hijo</label><input id="admin-search" type="search" value="${escapeAttribute(state.adminSearch || "")}" onchange="setState({adminSearch:this.value})" placeholder="Nombre de familia o hijo" /></div>
+        <div class="field"><label for="admin-search">Buscar familia o hijo</label><input id="admin-search" type="search" value="${escapeHtml(state.adminSearch || "")}" onchange="setState({adminSearch:this.value})" placeholder="Nombre de familia o hijo" /></div>
         <div class="grid two">
           ${(state.adminFamilies || [state.family]).filter((family) => !search || [family.name, family.email, ...family.children.map((child) => child.name)].some((value) => String(value || "").toLowerCase().includes(search))).map((family) => `
             <article class="person-card">
-              <h3>${family.name}</h3>
-              <p class="muted">${family.email} · ${family.phone || "Sin teléfono"}</p>
+              <h3>${escapeHtml(family.name)}</h3>
+              <p class="muted">${escapeHtml(family.email)} · ${escapeHtml(family.phone || "Sin teléfono")}</p>
               <div class="badge-row"><span class="badge">${family.tutors.length} adultos</span><span class="badge turquoise">${family.children.length} hijos</span></div>
             </article>`).join("") || `<div class="empty">No hay familias para esta búsqueda.</div>`}
         </div>
@@ -80,11 +83,11 @@ export function renderAdmin({ state, services, centers, groups, trainingKidsPlan
         <div class="grid">
           ${state.audit.slice(0, 8).map((item) => `
             <article class="task-card">
-              <div class="badge-row"><span class="badge">${item.service}</span><span class="badge">${item.date}</span></div>
-              <h3>${item.action}</h3>
-              <p class="muted">${item.actor}</p>
+              <div class="badge-row"><span class="badge">${escapeHtml(item.service)}</span><span class="badge">${escapeHtml(item.date)}</span></div>
+              <h3>${escapeHtml(item.action)}</h3>
+              <p class="muted">${escapeHtml(item.actor)}</p>
             </article>
-          `).join("")}
+          `).join("") || `<div class="empty">Sin acciones registradas.</div>`}
         </div>
       </div>
     </section>
@@ -93,83 +96,85 @@ export function renderAdmin({ state, services, centers, groups, trainingKidsPlan
 
 function renderEnrollmentAdmin({ summary, enrollment, state, services, centers, groups, trainingKidsPlans }) {
   if (!enrollment) return "";
-  const child = summary.child || (state.adminChildren || state.family.children).find((item) => item.id === enrollment.childId) || state.family.children[0];
+  const child = summary.child || (state.adminChildren || state.family.children).find((item) => item.id === enrollment.childId) || state.family.children[0] || {};
   const validGroups = groups.filter((group) => (
     group.service === enrollment.service
     && (!enrollment.centerId || group.centerId === enrollment.centerId)
     && (!getGroupOccupancy({ group, state }).full || group.id === enrollment.groupId)
   ));
   const pendingAction = state.pendingAdminAction?.enrollmentId === enrollment.id ? state.pendingAdminAction : null;
+  const enrollmentId = jsArg(enrollment.id);
+  const saving = state.saveState === "saving";
+  const assignedGroup = groups.find((group) => group.id === enrollment.groupId);
   return `
     <article class="task-card ${summary.needsReview ? "needs-attention" : ""}">
       <div class="badge-row">
-        <span class="badge ${enrollment.service === "training_kids" ? "turquoise" : "yellow"}">${serviceName(services, enrollment.service)}</span>
-        <span class="badge ${summary.tone}">${summary.label}</span>
+        <span class="badge ${enrollment.service === "training_kids" ? "turquoise" : "yellow"}">${escapeHtml(serviceName(services, enrollment.service))}</span>
+        <span class="badge ${summary.tone}">${escapeHtml(summary.label)}</span>
         ${summary.needsReview ? `<span class="badge red">Revision administrativa</span>` : ""}
       </div>
-      <h3>${child.name}</h3>
-      ${child.familyName ? `<p class="muted">${child.familyName}</p>` : ""}
-      ${enrollment.remote ? `<div class="badge-row"><span class="badge">Revisión: ${reviewLabel(enrollment.reviewStatus)}</span></div>` : ""}
+      <h3>${escapeHtml(child.name || "Hijo sin nombre")}</h3>
+      ${child.familyName ? `<p class="muted">${escapeHtml(child.familyName)}</p>` : ""}
+      ${enrollment.remote ? `<div class="badge-row"><span class="badge">Revisión: ${escapeHtml(reviewLabel(enrollment.reviewStatus))}</span></div>` : ""}
       <ul class="small-list">
-        <li><span>Centro</span><strong>${summary.centerLabel}</strong></li>
-        <li><span>Plan</span><strong>${enrollment.planId ? planName(trainingKidsPlans, enrollment.planId) : "Prealta"}</strong></li>
+        <li><span>Centro</span><strong>${escapeHtml(summary.centerLabel)}</strong></li>
+        <li><span>Plan</span><strong>${escapeHtml(enrollment.planId ? planName(trainingKidsPlans, enrollment.planId) : "Prealta")}</strong></li>
         <li><span>Datos</span><strong>${summary.requirements.personal.complete ? "Completos" : "Incompletos"}</strong></li>
         <li><span>Documentos obligatorios</span><strong>${summary.requirements.documents.complete ? "Completados" : "Pendientes"}</strong></li>
-        <li><span>Pago inicial</span><strong>${summary.requirements.payment.complete ? "Confirmado" : enrollment.payment}</strong></li>
-        <li><span>Grupo</span><strong>${enrollment.groupId || "Sin asignar"}</strong></li>
+        <li><span>Pago inicial</span><strong>${escapeHtml(summary.requirements.payment.complete ? "Confirmado" : enrollment.payment)}</strong></li>
+        <li><span>Grupo</span><strong>${escapeHtml(assignedGroup ? `${assignedGroup.name} · ${assignedGroup.day} ${assignedGroup.time}` : enrollment.groupId || "Sin asignar")}</strong></li>
       </ul>
-      ${summary.validationNotes.length ? `<div class="validation-box">${summary.validationNotes.join("<br>")}</div>` : ""}
-      ${summary.missing.length ? `<div class="missing-list"><strong>Falta para activar</strong>${summary.missing.map((item) => `<span>${item}</span>`).join("")}</div>` : `<div class="status-ok">Requisitos operativos completos.</div>`}
+      ${summary.validationNotes.length ? `<div class="validation-box">${summary.validationNotes.map(escapeHtml).join("<br>")}</div>` : ""}
+      ${summary.missing.length ? `<div class="missing-list"><strong>Falta para activar</strong>${summary.missing.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>` : `<div class="status-ok">Requisitos operativos completos.</div>`}
       ${enrollment.service === "training_kids" ? `
         <div class="field">
-          <label>Asignar grupo definitivo</label>
-          <select onchange="${state.appMode === "test" ? `setAdminGroupDraft('${enrollment.id}', this.value)` : `assignGroup('${enrollment.id}', this.value)`}">
+          <label for="group-select-${escapeHtml(enrollment.id)}">Asignar grupo definitivo</label>
+          <select id="group-select-${escapeHtml(enrollment.id)}" onchange="${state.appMode === "test" ? `setAdminGroupDraft(${enrollmentId}, this.value)` : `assignGroup(${enrollmentId}, this.value)`}">
             <option value="">Pendiente</option>
             ${validGroups.map((group) => {
               const occupancy = getGroupOccupancy({ group, state });
-              return `<option value="${group.id}" ${enrollment.groupId === group.id ? "selected" : ""}>${group.id} · ${centerName(centers, group.centerId)} · ${group.day} ${group.time} · ${occupancy.available} plazas</option>`;
+              const selected = (state.adminGroupDrafts?.[enrollment.id] ?? enrollment.groupId) === group.id;
+              return `<option value="${escapeHtml(group.id)}" ${selected ? "selected" : ""}>${escapeHtml(group.name)} · ${escapeHtml(centerName(centers, group.centerId))} · ${escapeHtml(group.day)} ${escapeHtml(group.time)} · ${occupancy.available} plazas</option>`;
             }).join("")}
           </select>
         </div>
-        <div class="field"><label for="review-note-${enrollment.id}">Observaciones para la familia</label><textarea id="review-note-${enrollment.id}" onchange="setAdminReviewNote('${enrollment.id}', this.value)" placeholder="Indica claramente qué debe revisar o completar">${escapeHtml(state.adminReviewNotes?.[enrollment.id] || enrollment.reviewNotes || "")}</textarea></div>
+        <div class="field"><label for="review-note-${escapeHtml(enrollment.id)}">Observaciones para la familia</label><textarea id="review-note-${escapeHtml(enrollment.id)}" onchange="setAdminReviewNote(${enrollmentId}, this.value)" placeholder="Indica claramente qué debe revisar o completar">${escapeHtml(state.adminReviewNotes?.[enrollment.id] ?? enrollment.reviewNotes ?? "")}</textarea></div>
         <div class="actions">
           ${state.appMode === "test" ? `
-            <button type="button" class="button" data-review-decision="approve" onclick="approveEnrollment('${enrollment.id}')" ${state.saveState === "saving" ? "disabled" : ""}>Aprobar solicitud</button>
-            <button type="button" class="button ghost" data-review-decision="request_changes" onclick="requestEnrollmentChanges('${enrollment.id}')" ${state.saveState === "saving" ? "disabled" : ""}>Solicitar cambios</button>
-            <button type="button" class="button ghost" data-review-decision="reject" onclick="rejectEnrollment('${enrollment.id}')" ${state.saveState === "saving" ? "disabled" : ""}>Rechazar</button>
+            <button type="button" class="button" data-review-decision="approve" onclick="approveEnrollment(${enrollmentId})" ${saving || pendingAction ? "disabled" : ""}>Aprobar solicitud</button>
+            <button type="button" class="button ghost" data-review-decision="request_changes" onclick="requestEnrollmentChanges(${enrollmentId})" ${saving || pendingAction ? "disabled" : ""}>Solicitar cambios</button>
+            <button type="button" class="button ghost" data-review-decision="reject" onclick="rejectEnrollment(${enrollmentId})" ${saving || pendingAction ? "disabled" : ""}>Rechazar</button>
           ` : ""}
           ${state.appMode === "demo" ? `
-            <button type="button" class="button ghost" data-review-decision="request_changes" onclick="requestEnrollmentChanges('${enrollment.id}')">Solicitar cambios</button>
-            <button class="button" ${summary.status === "ready" ? "" : "disabled"} onclick="activateEnrollment('${enrollment.id}')">Activar</button>
-            <button class="button ghost" ${summary.status === "active" ? "" : "disabled"} onclick="withdrawEnrollment('${enrollment.id}')">Dar de baja</button>
+            <button type="button" class="button ghost" data-review-decision="request_changes" onclick="requestEnrollmentChanges(${enrollmentId})" ${pendingAction ? "disabled" : ""}>Solicitar cambios</button>
+            <button type="button" class="button" ${summary.status === "ready" && !pendingAction ? "" : "disabled"} onclick="activateEnrollment(${enrollmentId})">Activar</button>
+            <button type="button" class="button ghost" ${summary.status === "active" && !pendingAction ? "" : "disabled"} onclick="withdrawEnrollment(${enrollmentId})">Dar de baja</button>
           ` : ""}
         </div>
-        ${pendingAction ? renderAdminConfirmation(pendingAction) : ""}
+        ${pendingAction ? renderAdminConfirmation(pendingAction, saving) : ""}
       ` : `
-        <button class="button yellow" onclick="markFootballInterest('${enrollment.id}')">Marcar contacto</button>
+        <button type="button" class="button yellow" onclick="markFootballInterest(${enrollmentId})">Marcar contacto</button>
       `}
     </article>
   `;
 }
 
-function escapeAttribute(value) {
-  return String(value || "").replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-}
-
-function escapeHtml(value) {
-  return escapeAttribute(value).replaceAll("'", "&#39;");
-}
-
-function renderAdminConfirmation(action) {
-  const text = action.type === "activate"
-    ? "Confirmar activacion simulada. No cambia pagos ni envia comunicaciones."
-    : "Confirmar baja local. No cancela pagos ni suscripciones.";
+function renderAdminConfirmation(action, saving) {
+  let text;
+  if (action.type === "review") {
+    const review = getEnrollmentReview(action.decision);
+    text = `${review.confirmation} ${review.detail}`;
+  } else if (action.type === "activate") {
+    text = "Confirmar activacion simulada. No cambia pagos ni envia comunicaciones.";
+  } else {
+    text = "Confirmar baja local. No cancela pagos ni suscripciones.";
+  }
   return `
-    <div class="admin-confirmation">
-      <strong>${text}</strong>
+    <div class="admin-confirmation" role="alertdialog" aria-live="assertive">
+      <strong>${escapeHtml(text)}</strong>
       <div class="actions">
-        <button class="button" onclick="confirmAdminAction()">Confirmar</button>
-        <button class="button ghost" onclick="cancelAdminAction()">Cancelar</button>
+        <button type="button" class="button" data-confirm-action="${escapeHtml(action.type)}" onclick="confirmAdminAction()" ${saving ? "disabled" : ""}>Confirmar</button>
+        <button type="button" class="button ghost" onclick="cancelAdminAction()" ${saving ? "disabled" : ""}>Cancelar</button>
       </div>
     </div>
   `;
@@ -177,16 +182,16 @@ function renderAdminConfirmation(action) {
 
 function renderAdminGroupCard({ group, state, services, centers }) {
   const occupancy = getGroupOccupancy({ group, state });
-  const pct = Math.min(100, Math.round((occupancy.occupied / occupancy.capacity) * 100));
+  const pct = occupancy.capacity ? Math.min(100, Math.round((occupancy.occupied / occupancy.capacity) * 100)) : 100;
   const cls = pct >= 100 ? "full" : pct >= 80 ? "hot" : "";
   return `
     <article class="group-card">
       <div class="badge-row">
-        <span class="badge ${group.service === "training_kids" ? "turquoise" : "yellow"}">${serviceName(services, group.service)}</span>
-        <span class="badge">${centerName(centers, group.centerId)}</span>
+        <span class="badge ${group.service === "training_kids" ? "turquoise" : "yellow"}">${escapeHtml(serviceName(services, group.service))}</span>
+        <span class="badge">${escapeHtml(centerName(centers, group.centerId))}</span>
       </div>
-      <h3>${group.id} · ${group.name}</h3>
-      <p class="muted">${group.day} · ${group.time}</p>
+      <h3>${escapeHtml(group.name)}</h3>
+      <p class="muted">${escapeHtml(group.day)} · ${escapeHtml(group.time)}</p>
       <div class="capacity">
         <div class="progress-head"><span>Capacidad</span><span>${occupancy.occupied}/${occupancy.capacity}</span></div>
         <div class="capacity-line"><div class="capacity-fill ${cls}" style="width:${pct}%"></div></div>
@@ -196,9 +201,14 @@ function renderAdminGroupCard({ group, state, services, centers }) {
   `;
 }
 
+function serviceFilterButton(value, label, activeValue) {
+  const active = activeValue === value;
+  return `<button type="button" class="side-filter ${active ? "active" : ""}" aria-pressed="${active}" onclick="setState({adminServiceFilter:${jsArg(value)}})">${escapeHtml(label)}</button>`;
+}
+
 function operationalFilterButton(value, label, activeValue) {
-  const realValue = value === "pending" ? "pending" : value;
-  return `<button class="side-filter ${activeValue === realValue ? "active" : ""}" onclick="setState({operationalStatusFilter:'${realValue}'})">${label}</button>`;
+  const active = activeValue === value;
+  return `<button type="button" class="side-filter ${active ? "active" : ""}" aria-pressed="${active}" onclick="setState({operationalStatusFilter:${jsArg(value)}})">${escapeHtml(label)}</button>`;
 }
 
 function reviewLabel(status) {
