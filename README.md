@@ -179,6 +179,7 @@ Archivos principales:
 - `docs/FASE_D_OPERATIVA.md`: roles, flujos, estado verificado y paso manual.
 - `supabase/migrations/202610280001_phase_f_remote_signature.sql`: firma remota de Fase F, pendiente de aplicar.
 - `supabase/tests/phase_f_rls.sql`: pruebas manuales de la firma remota.
+- `supabase/migrations/202610280002_harden_function_grants.sql`: sin ejecucion de funciones sin sesion y sin fuga de familia por jugador. Aplicada en pruebas.
 - `docs/FASE_F_FIRMA_REMOTA.md`: alcance, limites y pasos para aplicar la Fase F.
 - `docs/PROYECTO_PRUEBAS.md`: proyecto Supabase de pruebas actual, que se ha cargado y como se ha verificado.
 

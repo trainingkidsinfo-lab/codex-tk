@@ -26,6 +26,7 @@ En este orden, todo el 2026-10-28:
 3. `202609180001_link_test_users_and_verify_rls.sql`, con los identificadores de los dos usuarios de Auth del proyecto nuevo en lugar de los del anterior, y sin `begin`/`commit` porque la herramienta ya usa una transaccion. Incluye sus propias comprobaciones de aislamiento, que pasaron.
 4. `202609230001_phase_d_family_operations.sql`, sin cambios.
 5. `202610280001_phase_f_remote_signature.sql`, sin cambios.
+6. `202610280002_harden_function_grants.sql`, ver mas abajo.
 
 Usuarios de Auth, creados a mano en el panel y confirmados:
 
@@ -49,14 +50,33 @@ La inscripcion ficticia `77777777-7777-7777-7777-777777777771` empieza en revisi
 
 Las pruebas de firma simularon los archivos insertando filas en `storage.objects` dentro de la misma transaccion, que se deshizo al final.
 
-## Avisos del asesor de seguridad de Supabase
+## Refuerzo de permisos de funciones
 
-Ya existian en el proyecto anterior porque vienen de la Fase C. No son nuevos de la Fase F.
+Tras cargar la Fase F, el asesor de seguridad de Supabase mostro avisos heredados de la Fase C: las funciones se podian llamar sin sesion, `player_family_id` devolvia la familia de cualquier jugador si se conocia su identificador, y dos funciones de trigger no fijaban `search_path`.
 
-- Las funciones `SECURITY DEFINER` se pueden llamar sin sesion. Todas comprueban la identidad y rechazan llamadas sin permiso, salvo `player_family_id`, que devuelve la familia de un jugador si se conoce su identificador interno.
-- `touch_updated_at` y `prevent_signed_signature_update` no fijan `search_path`.
+Con autorizacion expresa se aplico el 2026-10-28 `202610280002_harden_function_grants.sql`:
 
-Propuesta pendiente de aprobacion: una migracion pequena que retire `EXECUTE` a `anon` en todas las funciones de `public` y fije `search_path` en esas dos.
+- Sin sesion no se puede ejecutar ninguna funcion de `public`.
+- Con sesion se conservan, de forma explicita, las funciones de las politicas RLS y las RPC de las Fases D y F.
+- `player_family_id` solo responde si quien pregunta tiene acceso a esa familia.
+- `search_path` fijo en las dos funciones de trigger.
+
+Comprobado despues, en una transaccion deshecha al final:
+
+| Comprobacion | Resultado |
+|---|---|
+| Sin sesion: funciones y lectura de familias | Bloqueado |
+| Familia: familias, jugadores, fichas medicas, contactos | 1, 2, 2, 2 (solo los suyos) |
+| Familia: familia de un jugador propio y de uno ajeno | La suya y `null` |
+| Pruebas de Fase D | Correctas |
+| Pruebas de Fase F con recorrido completo de firma | Correctas |
+| Administracion: familias, jugadores, firmas; revisar solicitud | 2, 3, 2; correcto |
+| Restos tras las pruebas | Ninguno |
+
+Avisos que se mantienen:
+
+- Las RPC `SECURITY DEFINER` son llamables con sesion. Es el diseno: cada una deriva la identidad de `auth.uid()` y valida permisos.
+- Proteccion de contrasenas filtradas desactivada en Auth. La app entra por enlace al correo, sin contrasena.
 
 Los avisos de rendimiento (indices en claves foraneas, politicas permisivas multiples) no son relevantes con el volumen de pruebas.
 
