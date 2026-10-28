@@ -44,12 +44,36 @@ No se han ejecutado migraciones, seed ni SQL remoto. La solicitud ficticia `7777
 
 ## Como aplicarla en el proyecto de pruebas
 
-Requiere tu aprobacion expresa. Pasos:
+Requiere aprobacion expresa. Aplicarla no rompe versiones anteriores de la app: siguen leyendo las firmas igual.
 
-1. En el SQL Editor del proyecto de pruebas, ejecutar una sola vez `supabase/migrations/202610280001_phase_f_remote_signature.sql`.
-2. Ejecutar `supabase/tests/phase_f_rls.sql` sustituyendo los marcadores por usuarios y registros ficticios. Termina en `rollback` y no deja datos.
-3. En la app en modo test, con la familia ficticia, firmar la autorizacion de imagen y despues el contrato.
-4. Con el usuario administrador, comprobar el justificante, abrir el PDF firmado y revisar la auditoria.
+1. En el SQL Editor del proyecto de pruebas, pegar y ejecutar una sola vez `supabase/migrations/202610280001_phase_f_remote_signature.sql`.
+2. Comprobar el resultado con esta consulta. Debe devolver `true`, `true`, `4` y `true`:
+
+```sql
+select
+  exists (select 1 from pg_proc where proname = 'family_sign_document') as rpc_creada,
+  not exists (select 1 from pg_policies where tablename = 'signature_records' and policyname = 'signatures_family_insert') as insercion_directa_cerrada,
+  (select count(*) from public.document_versions where sha256 is not null) as originales_con_huella,
+  exists (select 1 from pg_policies where policyname = 'storage_family_signed_insert') as subida_pdf_permitida;
+```
+
+3. Pegar y ejecutar `supabase/tests/phase_f_rls.sql`. Usa los usuarios ficticios de Fase C y termina en `rollback`, asi que no deja datos. Si termina sin errores, las pruebas han pasado.
+4. En la app en modo test, con el tutor ficticio, firmar la autorizacion de imagen y despues el contrato.
+5. Con el administrador ficticio, abrir el justificante, ver el PDF firmado y revisar la auditoria.
+
+Firmar en la app crea registros de firma ligados a la inscripcion ficticia `77777777-...-771`, pero no cambia su estado: sigue en `changes_requested`.
+
+### Deshacer
+
+Solo si algo falla al aplicarla y hay que volver al estado anterior. Las columnas nuevas y las huellas se pueden dejar: no molestan a la version anterior.
+
+```sql
+drop function if exists public.family_sign_document(uuid, uuid, text, jsonb, jsonb, text, text, text, text);
+drop policy if exists storage_family_signed_insert on storage.objects;
+drop index if exists public.signature_records_one_signed_per_version;
+grant insert on public.signature_records to authenticated;
+create policy signatures_family_insert on public.signature_records for insert with check (public.can_access_family(family_id));
+```
 
 ## Pruebas
 

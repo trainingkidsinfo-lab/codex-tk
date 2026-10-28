@@ -1,17 +1,22 @@
 -- Pruebas manuales de Fase F (firma remota).
 -- Ejecutar solo tras aplicar 202610280001_phase_f_remote_signature.sql en el proyecto de pruebas.
 -- Todo ocurre dentro de una transaccion que termina en rollback: no deja datos.
--- Sustituir los marcadores por usuarios y registros ficticios aislados.
+-- Usa los usuarios y registros ficticios de las migraciones de Fase C ya aplicadas:
+--   tutor ficticio a87bb54e-..., administrador ficticio 8266239d-...,
+--   familia demo 99999999-..., familia de aislamiento aaaaaaaa-...-000000000002,
+--   inscripcion ficticia 77777777-...-771 (no se modifica: todo acaba en rollback).
+-- La inscripcion aaaaaaaa-...-0000000000e1 no existe a proposito: representa una ajena.
+-- Si todo va bien, el editor termina sin errores. Un fallo aparece en rojo con "Fallo".
 
 begin;
 set local role authenticated;
-set local "request.jwt.claim.sub" = 'UUID_AUTH_FAMILIA_A';
+set local "request.jwt.claim.sub" = 'a87bb54e-9143-4290-92a4-6e919e77002e';
 
 -- 1. Una familia ya no puede insertar firmas directamente.
 do $$ begin
   begin
     insert into public.signature_records (family_id, enrollment_id, document_version_id, status, signed_at)
-    values ('UUID_FAMILIA_A', 'UUID_INSCRIPCION_FAMILIA_A', 'ffffffff-ffff-ffff-ffff-fffffffffff1', 'signed', now());
+    values ('99999999-9999-9999-9999-999999999999', '77777777-7777-7777-7777-777777777771', 'ffffffff-ffff-ffff-ffff-fffffffffff1', 'signed', now());
     raise exception 'RLS fallo: familia pudo insertar una firma directa';
   exception when insufficient_privilege then null;
   when others then
@@ -23,10 +28,10 @@ end $$;
 do $$ begin
   begin
     perform public.family_sign_document(
-      'UUID_INSCRIPCION_FAMILIA_B', 'ffffffff-ffff-ffff-ffff-fffffffffff1', 'Intento cruzado',
+      'aaaaaaaa-0000-0000-0000-0000000000e1', 'ffffffff-ffff-ffff-ffff-fffffffffff1', 'Intento cruzado',
       '{"x":{"value":"1"}}'::jsonb,
       '{"lectura_completa":true,"version_aceptada":true,"firma_simulada":true,"contrato_actividad":true,"anexo_1_riesgos":true,"anexo_2_parq":true}'::jsonb,
-      'families/UUID_FAMILIA_B/enrollments/UUID_INSCRIPCION_FAMILIA_B/ffffffff-ffff-ffff-ffff-fffffffffff1/x-firma.png',
+      'families/aaaaaaaa-0000-0000-0000-000000000002/enrollments/aaaaaaaa-0000-0000-0000-0000000000e1/ffffffff-ffff-ffff-ffff-fffffffffff1/x-firma.png',
       repeat('a', 64), null, null
     );
     raise exception 'RLS fallo: familia pudo firmar una inscripcion ajena';
@@ -39,10 +44,10 @@ end $$;
 do $$ begin
   begin
     perform public.family_sign_document(
-      'UUID_INSCRIPCION_FAMILIA_A', 'ffffffff-ffff-ffff-ffff-fffffffffff1', 'Tutor Prueba',
+      '77777777-7777-7777-7777-777777777771', 'ffffffff-ffff-ffff-ffff-fffffffffff1', 'Tutor Prueba',
       '{"x":{"value":"1"}}'::jsonb,
       '{"lectura_completa":true,"version_aceptada":true,"firma_simulada":true}'::jsonb,
-      'families/UUID_FAMILIA_A/enrollments/UUID_INSCRIPCION_FAMILIA_A/ffffffff-ffff-ffff-ffff-fffffffffff1/x-firma.png',
+      'families/99999999-9999-9999-9999-999999999999/enrollments/77777777-7777-7777-7777-777777777771/ffffffff-ffff-ffff-ffff-fffffffffff1/x-firma.png',
       repeat('a', 64), null, null
     );
     raise exception 'Fallo: contrato firmado sin anexos ni PDF';
@@ -55,10 +60,10 @@ end $$;
 do $$ begin
   begin
     perform public.family_sign_document(
-      'UUID_INSCRIPCION_FAMILIA_A', 'ffffffff-ffff-ffff-ffff-fffffffffff2', 'Tutor Prueba',
+      '77777777-7777-7777-7777-777777777771', 'ffffffff-ffff-ffff-ffff-fffffffffff2', 'Tutor Prueba',
       '{"imageAuthorization":{"value":"deny"}}'::jsonb,
       '{"lectura_completa":true,"version_aceptada":true,"firma_simulada":true}'::jsonb,
-      'families/UUID_FAMILIA_A/enrollments/UUID_INSCRIPCION_FAMILIA_A/ffffffff-ffff-ffff-ffff-fffffffffff2/x-firma.png',
+      'families/99999999-9999-9999-9999-999999999999/enrollments/77777777-7777-7777-7777-777777777771/ffffffff-ffff-ffff-ffff-fffffffffff2/x-firma.png',
       'no-es-una-huella', null, null
     );
     raise exception 'Fallo: huella invalida aceptada';
@@ -71,7 +76,7 @@ end $$;
 -- Requiere haber subido antes, con el usuario de la familia A, la imagen de firma en
 -- tk-signature-evidence con la ruta indicada. Sustituir RUTA_FIRMA_SUBIDA y HUELLA_FIRMA.
 -- select public.family_sign_document(
---   'UUID_INSCRIPCION_FAMILIA_A', 'ffffffff-ffff-ffff-ffff-fffffffffff2', 'Tutor Prueba',
+--   '77777777-7777-7777-7777-777777777771', 'ffffffff-ffff-ffff-ffff-fffffffffff2', 'Tutor Prueba',
 --   '{"imageAuthorization":{"label":"Decision","value":"deny"}}'::jsonb,
 --   '{"lectura_completa":true,"version_aceptada":true,"firma_simulada":true}'::jsonb,
 --   'RUTA_FIRMA_SUBIDA', 'HUELLA_FIRMA', null, null
@@ -80,7 +85,7 @@ end $$;
 -- Una llamada con otra huella debe fallar con document_already_signed.
 
 -- 6. Una firma registrada no se puede modificar, ni siquiera por administracion.
-set local "request.jwt.claim.sub" = 'UUID_AUTH_ADMIN';
+set local "request.jwt.claim.sub" = '8266239d-b676-4965-be6e-342138311623';
 do $$ begin
   begin
     update public.signature_records set signer_name = 'Cambio' where status = 'signed';
