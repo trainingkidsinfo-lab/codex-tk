@@ -1,7 +1,9 @@
+import { escapeHtml } from "../ui/escape.js?v=e1";
+
 export function renderAuth({ state, testCode, appConfig }) {
   const isSupabaseTest = appConfig?.isSupabaseTest;
   const isLinkSent = isSupabaseTest && Boolean(state.pendingLinkEmail);
-  const emailValue = escapeAttribute(state.authEmailDraft || state.pendingLinkEmail || state.family.email || "");
+  const emailValue = escapeHtml(state.authEmailDraft || state.pendingLinkEmail || state.family.email || "");
   const resendSeconds = Math.max(0, Math.ceil(((state.resendAvailableAt || 0) - Date.now()) / 1000));
   const requestDisabled = Boolean(state.authRequestInFlight);
   return `
@@ -36,24 +38,12 @@ export function renderAuth({ state, testCode, appConfig }) {
           ${state.authError ? `<div class="document-warning" role="alert">${escapeHtml(state.authError)}</div>` : ""}
           ${state.authNotice ? `<div class="status-ok">${escapeHtml(state.authNotice)}</div>` : ""}
           ${isSupabaseTest && !isLinkSent ? `<p class="muted">Abre el enlace recibido en este mismo navegador.</p>` : ""}
-          ${!isSupabaseTest ? `<p class="muted">Codigo simulado para modo demo: <strong>${testCode}</strong></p>` : ""}
+          ${!isSupabaseTest ? `<p class="muted">Codigo simulado para modo demo: <strong>${escapeHtml(testCode)}</strong></p>` : ""}
         </div>
       </section>
       <div id="toast" class="toast" role="status"></div>
     </main>
   `;
-}
-
-function escapeAttribute(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
-function escapeHtml(value) {
-  return escapeAttribute(value).replaceAll("'", "&#39;");
 }
 
 export function renderLoading(message = "Preparando vista privada", isSupabaseTest = false) {
@@ -62,7 +52,7 @@ export function renderLoading(message = "Preparando vista privada", isSupabaseTe
       <section class="loading-box">
         <div class="state-card loading">
           <p class="eyebrow">${isSupabaseTest ? "Fase D · Supabase test" : "Modo demo"}</p>
-          <h2>${message}</h2>
+          <h2>${escapeHtml(message)}</h2>
           <p class="muted">${isSupabaseTest ? "Cargando datos ficticios privados desde Supabase." : "Datos ficticios y locales. No se conecta ningun servicio externo."}</p>
         </div>
       </section>

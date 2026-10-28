@@ -1,6 +1,8 @@
-import { serviceName } from "../ui/shared.js";
-import { parqQuestions } from "./pdf-generator.js?v=13";
+import { serviceName } from "../ui/shared.js?v=e1";
+import { escapeHtml, jsArg } from "../ui/escape.js?v=e1";
+import { parqQuestions } from "./pdf-generator.js?v=e1";
 
+// Documentos vigentes en el flujo activo. Cualquier otra plantilla queda fuera.
 const ACTION_DOCUMENT_IDS = new Set(["tk-service-terms", "tk-image-rights"]);
 const INFO_DOCUMENT_IDS = new Set(["tk-norms-guarantees", "global-family-account"]);
 const ACTIVE_DOCUMENT_IDS = new Set([...ACTION_DOCUMENT_IDS, ...INFO_DOCUMENT_IDS]);
@@ -15,10 +17,11 @@ export const documentStatusMeta = {
 export function renderDocuments(context) {
   const { state, services, documentTemplates } = context;
   const selectedChild = state.family.children.find((child) => child.id === state.selectedChildId) || state.family.children[0];
-  const visibleDocuments = activeDocumentsForChild(state.documents, selectedChild.id);
+  const visibleDocuments = activeDocumentsForChild(state.documents, selectedChild?.id);
   const activeDoc = visibleDocuments.find((document) => document.id === state.activeDocumentId);
   const signedActionable = visibleDocuments.filter((document) => ACTION_DOCUMENT_IDS.has(document.templateId) && document.status === "signed").length;
   const pendingActionable = visibleDocuments.filter((document) => ACTION_DOCUMENT_IDS.has(document.templateId) && ["pending_complete", "pending_signature", "update_required"].includes(document.status)).length;
+  const childLabel = selectedChild?.name || "tu familia";
 
   return `
     <section class="hero-band">
@@ -30,16 +33,16 @@ export function renderDocuments(context) {
       <div class="hero-side">
         <div class="hero-pill">${signedActionable} firmados</div>
         <div class="hero-pill">${pendingActionable} pendientes</div>
-        <div class="hero-pill">${selectedChild.name}</div>
+        <div class="hero-pill">${escapeHtml(childLabel)}</div>
       </div>
     </section>
 
     <section class="section-title">
       <div>
-        <h2>Documentos de ${selectedChild.name}</h2>
+        <h2>Documentos de ${escapeHtml(childLabel)}</h2>
         <p class="muted">Globales, por servicio y por inscripcion. Cada version queda identificada.</p>
       </div>
-      <button class="button ghost" onclick="setState({activeDocumentId:''})">Ver lista</button>
+      <button type="button" class="button ghost" onclick="setState({activeDocumentId:''})">Ver lista</button>
     </section>
 
     ${activeDoc ? renderDocumentDetail({ ...context, document: activeDoc }) : renderDocumentList({ documents: visibleDocuments, state, services, documentTemplates })}
@@ -100,6 +103,7 @@ function renderDocumentList({ documents, state, services, documentTemplates }) {
 
 function renderDocumentDetail({ document, state, services, documentTemplates, legalDocumentSources, centers, groups, trainingKidsPlans }) {
   const template = documentTemplates.find((item) => item.id === document.templateId);
+  if (!template) return `<div class="empty">Documento no disponible.</div>`;
   const source = template.sourceId ? legalDocumentSources.find((item) => item.id === template.sourceId) : null;
   if (INFO_DOCUMENT_IDS.has(document.templateId)) {
     return renderInformativeDocumentDetail({ document, template, source, services });
@@ -119,30 +123,30 @@ function renderDocumentDetail({ document, state, services, documentTemplates, le
     <section class="panel pad document-detail">
       <div class="section-title compact">
         <div>
-          <span class="badge ${statusTone(document.status)}">${statusLabel(document.status)}</span>
-          <h2>${template.title}</h2>
-          <p class="muted">${template.description}</p>
+          <span class="badge ${statusTone(document.status)}">${escapeHtml(statusLabel(document.status))}</span>
+          <h2>${escapeHtml(template.title)}</h2>
+          <p class="muted">${escapeHtml(template.description)}</p>
         </div>
-        <button class="button ghost" onclick="setState({activeDocumentId:''})">Cerrar</button>
+        <button type="button" class="button ghost" onclick="setState({activeDocumentId:''})">Cerrar</button>
       </div>
-      <div class="document-warning">${document.validationNote || template.reviewFlag || "Textos definitivos aportados."} Firma, almacenamiento, auditoria y justificante siguen siendo simulados.</div>
+      <div class="document-warning">${escapeHtml(document.validationNote || template.reviewFlag || "Textos definitivos aportados.")} Firma, almacenamiento, auditoria y justificante siguen siendo simulados.</div>
       ${renderDocumentFlowSteps(flowStep)}
       <div class="grid two">
         <div class="demo-document">
-          <p class="eyebrow">${source ? "Documento definitivo aportado" : "Documento de datos compartidos"}</p>
-          <h3>${template.title}</h3>
+          <p class="eyebrow">Documento definitivo aportado</p>
+          <h3>${escapeHtml(template.title)}</h3>
           <ul class="small-list">
-            <li><span>ID documento</span><strong>${document.id}</strong></li>
-            <li><span>Version</span><strong>${document.version}</strong></li>
-            <li><span>Vigencia</span><strong>${document.effectiveDate || template.effectiveDate || "Pendiente"}</strong></li>
-            <li><span>Servicio</span><strong>${serviceName(services, document.service)}</strong></li>
-            <li><span>Hijo</span><strong>${child?.name || "Cuenta familiar"}</strong></li>
-            <li><span>Inscripcion</span><strong>${enrollment?.id || "Global"}</strong></li>
+            <li><span>ID documento</span><strong>${escapeHtml(document.id)}</strong></li>
+            <li><span>Version</span><strong>${escapeHtml(document.version)}</strong></li>
+            <li><span>Vigencia</span><strong>${escapeHtml(document.effectiveDate || template.effectiveDate || "Pendiente")}</strong></li>
+            <li><span>Servicio</span><strong>${escapeHtml(serviceName(services, document.service))}</strong></li>
+            <li><span>Hijo</span><strong>${escapeHtml(child?.name || "Cuenta familiar")}</strong></li>
+            <li><span>Inscripcion</span><strong>${escapeHtml(enrollment?.id || "Global")}</strong></li>
           </ul>
           ${source ? `
             <div class="document-actions">
-              <a class="button ghost" href="${source.originalPath}" target="_blank" rel="noopener">Ver documento</a>
-              <a class="button ghost" href="${source.downloadPath}" download>Descargar original</a>
+              <a class="button ghost" href="${escapeHtml(source.originalPath)}" target="_blank" rel="noopener">Ver documento</a>
+              <a class="button ghost" href="${escapeHtml(source.downloadPath)}" download>Descargar original</a>
             </div>
           ` : ""}
         </div>
@@ -150,7 +154,7 @@ function renderDocumentDetail({ document, state, services, documentTemplates, le
       </div>
       ${flowStep === "signed" ? renderImmutableSnapshot(snapshot) : ""}
       ${flowStep === "fill" ? renderFillableForm({ document, fields, missingFields }) : ""}
-      ${flowStep === "review" ? renderDocumentBody({ document, template, source, child, fields, snapshot, state }) : ""}
+      ${flowStep === "review" ? renderDocumentBody({ document, template, source, fields, snapshot, state }) : ""}
       ${flowStep === "sign" ? renderSignatureForm({ document, state, canSign }) : ""}
     </section>
   `;
@@ -163,25 +167,25 @@ function renderInformativeDocumentDetail({ document, template, source, services 
       <div class="section-title compact">
         <div>
           <span class="badge">Documento informativo</span>
-          <h2>${template.title}</h2>
-          <p class="muted">${template.description}</p>
+          <h2>${escapeHtml(template.title)}</h2>
+          <p class="muted">${escapeHtml(template.description)}</p>
         </div>
-        <button class="button ghost" onclick="setState({activeDocumentId:''})">Cerrar</button>
+        <button type="button" class="button ghost" onclick="setState({activeDocumentId:''})">Cerrar</button>
       </div>
       <div class="grid two">
         <div class="demo-document">
           <p class="eyebrow">Informacion disponible</p>
-          <h3>${template.title}</h3>
+          <h3>${escapeHtml(template.title)}</h3>
           <ul class="small-list">
-            <li><span>Version</span><strong>${document.version}</strong></li>
-            <li><span>Vigencia</span><strong>${document.effectiveDate || template.effectiveDate || "Pendiente"}</strong></li>
-            <li><span>Servicio</span><strong>${serviceName(services, document.service)}</strong></li>
+            <li><span>Version</span><strong>${escapeHtml(document.version)}</strong></li>
+            <li><span>Vigencia</span><strong>${escapeHtml(document.effectiveDate || template.effectiveDate || "Pendiente")}</strong></li>
+            <li><span>Servicio</span><strong>${escapeHtml(serviceName(services, document.service))}</strong></li>
             <li><span>Tipo</span><strong>Documento informativo</strong></li>
           </ul>
           ${source ? `
             <div class="document-actions">
-              <a class="button ghost" href="${source.originalPath}" target="_blank" rel="noopener">${viewLabel}</a>
-              <a class="button ghost" href="${source.downloadPath}" download>Descargar</a>
+              <a class="button ghost" href="${escapeHtml(source.originalPath)}" target="_blank" rel="noopener">${viewLabel}</a>
+              <a class="button ghost" href="${escapeHtml(source.downloadPath)}" download>Descargar</a>
             </div>
           ` : ""}
         </div>
@@ -201,20 +205,22 @@ function renderDocumentFlowSteps(activeStep) {
     ["sign", "Firmar"],
     ["signed", "Copia firmada"],
   ];
+  const activeIndex = steps.findIndex((item) => item[0] === activeStep);
   return `
-    <div class="document-flow">
+    <ol class="document-flow" aria-label="Pasos del documento">
       ${steps.map(([key, label], index) => `
-        <div class="flow-step ${activeStep === key ? "active" : ""} ${steps.findIndex((item) => item[0] === activeStep) > index ? "done" : ""}">
+        <li class="flow-step ${activeStep === key ? "active" : ""} ${activeIndex > index ? "done" : ""}" ${activeStep === key ? 'aria-current="step"' : ""}>
           <span>${index + 1}</span>
           <strong>${label}</strong>
-        </div>
+        </li>
       `).join("")}
-    </div>
+    </ol>
   `;
 }
 
 function renderFillableForm({ document, fields, missingFields }) {
   if (!fields.length || document.status === "signed") return "";
+  const documentId = jsArg(document.id);
   return `
     <section class="panel pad fillable-panel">
       <div class="section-title compact">
@@ -222,14 +228,14 @@ function renderFillableForm({ document, fields, missingFields }) {
           <h3>Campos rellenables</h3>
           <p class="muted">Los importes, tarifa, servicio, centro y grupo vienen de la inscripcion y no son editables por la familia.</p>
         </div>
-        <button class="button ghost" onclick="saveDocumentDraft('${document.id}')">Guardar borrador</button>
+        <button type="button" class="button ghost" onclick="saveDocumentDraft(${documentId})">Guardar borrador</button>
       </div>
-      ${missingFields.length ? `<div class="validation-box">Faltan: ${missingFields.map((field) => field.label).join(", ")}</div>` : ""}
+      ${missingFields.length ? `<div class="validation-box">Faltan: ${missingFields.map((field) => escapeHtml(field.label)).join(", ")}</div>` : ""}
       <div class="grid two">
         ${fields.map((field) => renderField({ document, field })).join("")}
       </div>
       <div class="actions document-step-actions">
-        <button class="button" onclick="continueDocumentReview('${document.id}')">Guardar datos y revisar documento</button>
+        <button type="button" class="button" onclick="continueDocumentReview(${documentId})">Guardar datos y revisar documento</button>
       </div>
     </section>
   `;
@@ -238,24 +244,25 @@ function renderFillableForm({ document, fields, missingFields }) {
 function renderField({ document, field }) {
   const draftValue = document.formDraft?.[field.id]?.value ?? document.formDraft?.[field.id];
   const value = draftValue ?? field.value ?? "";
+  const fieldId = escapeHtml(field.id);
   if (field.type === "radio") {
     return `
       <fieldset class="field radio-field">
-        <legend>${field.label}${field.required ? " *" : ""}</legend>
-        ${field.help ? `<small class="muted">${field.help}</small>` : ""}
+        <legend>${escapeHtml(field.label)}${field.required ? " *" : ""}</legend>
+        ${field.help ? `<small class="muted">${escapeHtml(field.help)}</small>` : ""}
         <div class="radio-options">
           ${field.options.map((option) => `
             <label class="radio-card">
               <input
                 type="radio"
-                name="field-${field.id}"
-                data-doc-field="${field.id}"
+                name="field-${fieldId}"
+                data-doc-field="${fieldId}"
                 data-field-label="${escapeHtml(field.label)}"
                 data-required="${field.required ? "true" : "false"}"
                 value="${escapeHtml(option.value)}"
                 ${value === option.value ? "checked" : ""}
               />
-              <span>${option.label}</span>
+              <span>${escapeHtml(option.label)}</span>
             </label>
           `).join("")}
         </div>
@@ -263,8 +270,8 @@ function renderField({ document, field }) {
     `;
   }
   const attrs = [
-    `id="field-${field.id}"`,
-    `data-doc-field="${field.id}"`,
+    `id="field-${fieldId}"`,
+    `data-doc-field="${fieldId}"`,
     `data-field-label="${escapeHtml(field.label)}"`,
     field.required ? `data-required="true"` : "",
     field.readOnly ? "readonly" : "",
@@ -272,7 +279,7 @@ function renderField({ document, field }) {
   ].filter(Boolean).join(" ");
   return `
     <div class="field">
-      <label for="field-${field.id}">${field.label}${field.required ? " *" : ""}</label>
+      <label for="field-${fieldId}">${escapeHtml(field.label)}${field.required ? " *" : ""}</label>
       ${field.type === "textarea"
         ? `<textarea ${attrs} placeholder="${escapeHtml(field.placeholder || "")}">${escapeHtml(value)}</textarea>`
         : `<input ${attrs} value="${escapeHtml(value)}" placeholder="${escapeHtml(field.placeholder || "")}" />`}
@@ -281,10 +288,11 @@ function renderField({ document, field }) {
   `;
 }
 
-function renderDocumentBody({ document, template, source, child, fields, snapshot, state }) {
-  const text = snapshot?.documentText || source?.text || sharedDataText({ document, template, child });
+function renderDocumentBody({ document, template, source, fields, snapshot, state }) {
+  const text = snapshot?.documentText || source?.text || `${template.title}\n\nDocumento visible en esta fase, sin contenido legal adicional.`;
   const reviewed = Boolean(state.reviewedDocuments?.[document.id]);
   if (document.templateId === "tk-service-terms") return renderContractPdfReview({ document, reviewed });
+  const documentId = jsArg(document.id);
   return `
     <section class="legal-reader">
       <div class="section-title compact">
@@ -294,14 +302,14 @@ function renderDocumentBody({ document, template, source, child, fields, snapsho
         </div>
         <span class="badge">${text.length.toLocaleString("es-ES")} caracteres</span>
       </div>
-      <div class="legal-text" data-legal-reader="${document.id}" onscroll="markDocumentReadIfBottom(event, '${document.id}')">
+      <div class="legal-text" tabindex="0" data-legal-reader="${escapeHtml(document.id)}" onscroll="markDocumentReadIfBottom(event, ${documentId})">
         ${renderCompletedFieldsPreview(snapshot?.fieldValues || document.formDraft || fieldsToValues(fields))}
         ${text.split(/\n{2,}/).map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`).join("")}
-        <span class="reader-end" data-reader-end="${document.id}" aria-hidden="true"></span>
+        <span class="reader-end" data-reader-end="${escapeHtml(document.id)}" aria-hidden="true"></span>
       </div>
       <div class="actions document-step-actions">
-        <button class="button ghost" onclick="setDocumentStep('${document.id}', 'fill')">Editar datos</button>
-        <button id="continueSignatureButton" class="button" ${reviewed ? "" : "disabled"} onclick="startDocumentSignature('${document.id}')">Continuar a firma</button>
+        <button type="button" class="button ghost" onclick="setDocumentStep(${documentId}, 'fill')">Editar datos</button>
+        <button type="button" id="continueSignatureButton" class="button" ${reviewed ? "" : "disabled"} onclick="startDocumentSignature(${documentId})">Continuar a firma</button>
       </div>
       ${reviewed ? "" : `<div class="validation-box reader-hint">Desplazate hasta el final del documento para activar la siguiente accion.</div>`}
     </section>
@@ -309,6 +317,8 @@ function renderDocumentBody({ document, template, source, child, fields, snapsho
 }
 
 function renderContractPdfReview({ document, reviewed }) {
+  const documentId = jsArg(document.id);
+  const draftPdf = escapeHtml(document.generatedDraftPdf || "");
   return `
     <section class="legal-reader">
       <div class="section-title compact">
@@ -316,16 +326,16 @@ function renderContractPdfReview({ document, reviewed }) {
           <h3>Vista previa del PDF cumplimentado</h3>
           <p class="muted">Copia generada localmente sobre el PDF original aportado. Revisa las paginas hasta el final antes de firmar.</p>
         </div>
-        <span class="badge">${document.generatedDraftHash ? `Hash ${document.generatedDraftHash.slice(0, 10)}...` : "Pendiente"}</span>
+        <span class="badge">${document.generatedDraftHash ? `Hash ${escapeHtml(String(document.generatedDraftHash).slice(0, 10))}...` : "Pendiente"}</span>
       </div>
-      <div class="pdf-review-box" data-legal-reader="${document.id}" onscroll="markDocumentReadIfBottom(event, '${document.id}')">
+      <div class="pdf-review-box" tabindex="0" data-legal-reader="${escapeHtml(document.id)}" onscroll="markDocumentReadIfBottom(event, ${documentId})">
         ${document.generatedDraftPdf ? renderContractPagePreview(document.generatedDraftData) : `<div class="empty">Generando PDF cumplimentado. Vuelve a pulsar revisar si no aparece.</div>`}
-        <span class="reader-end" data-reader-end="${document.id}" aria-hidden="true"></span>
+        <span class="reader-end" data-reader-end="${escapeHtml(document.id)}" aria-hidden="true"></span>
       </div>
       <div class="actions document-step-actions">
-        <button class="button ghost" onclick="setDocumentStep('${document.id}', 'fill')">Editar datos</button>
-        <button id="continueSignatureButton" class="button" ${reviewed ? "" : "disabled"} onclick="startDocumentSignature('${document.id}')">Continuar a firma</button>
-        ${document.generatedDraftPdf ? `<a class="button ghost" href="${document.generatedDraftPdf}" target="_blank" rel="noopener">Ver PDF generado</a><a class="button ghost" href="${document.generatedDraftPdf}" download="contrato-training-kids-cumplimentado-simulado.pdf">Descargar PDF cumplimentado</a>` : ""}
+        <button type="button" class="button ghost" onclick="setDocumentStep(${documentId}, 'fill')">Editar datos</button>
+        <button type="button" id="continueSignatureButton" class="button" ${reviewed ? "" : "disabled"} onclick="startDocumentSignature(${documentId})">Continuar a firma</button>
+        ${document.generatedDraftPdf ? `<a class="button ghost" href="${draftPdf}" target="_blank" rel="noopener">Ver PDF generado</a><a class="button ghost" href="${draftPdf}" download="contrato-training-kids-cumplimentado-simulado.pdf">Descargar PDF cumplimentado</a>` : ""}
       </div>
       ${reviewed ? "" : `<div class="validation-box reader-hint">Llega al final de la vista previa para activar la firma. Si el PDF cabe completo, se activara automaticamente.</div>`}
     </section>
@@ -391,7 +401,7 @@ function renderDocumentActionPanel({ document, state, canSign, flowStep, missing
       <div class="signature-panel">
         <h3>1. Completar datos</h3>
         <p class="muted">Rellena los campos necesarios. Los datos disponibles ya vienen precargados.</p>
-        ${missingFields.length ? `<div class="validation-box">Para revisar faltan: ${missingFields.map((field) => field.label).join(", ")}</div>` : `<div class="status-ok">Datos listos para revisar.</div>`}
+        ${missingFields.length ? `<div class="validation-box">Para revisar faltan: ${missingFields.map((field) => escapeHtml(field.label)).join(", ")}</div>` : `<div class="status-ok">Datos listos para revisar.</div>`}
       </div>
     `;
   }
@@ -417,36 +427,38 @@ function renderDocumentActionPanel({ document, state, canSign, flowStep, missing
 function renderSignatureForm({ document, state, canSign }) {
   const tutorOptions = state.family.tutors.filter((tutor) => tutor.canSign);
   const isContract = document.templateId === "tk-service-terms";
+  const documentId = jsArg(document.id);
+  const disabled = canSign ? "" : "disabled";
   return `
     <div class="signature-panel">
       <h3>Revision y firma simulada</h3>
-      <p class="muted">Confirma expresamente la version ${document.version}. La firma no tiene validez juridica real en esta fase.</p>
-      <div class="validation-box hidden" id="signatureValidationBox"></div>
+      <p class="muted">Confirma expresamente la version ${escapeHtml(document.version)}. La firma no tiene validez juridica real en esta fase.</p>
+      <div class="validation-box hidden" id="signatureValidationBox" role="alert"></div>
       <div class="form-grid">
         <div class="field">
-          <label>Tutor firmante</label>
-          <select id="docSigner" ${canSign ? "" : "disabled"}>
-            ${tutorOptions.map((tutor) => `<option value="${tutor.id}">${tutor.name}</option>`).join("")}
+          <label for="docSigner">Tutor firmante</label>
+          <select id="docSigner" ${disabled}>
+            ${tutorOptions.map((tutor) => `<option value="${escapeHtml(tutor.id)}">${escapeHtml(tutor.name)}</option>`).join("")}
           </select>
         </div>
         <div class="field">
-          <label>Nombre completo del firmante</label>
-          <input id="docRequiredField" ${canSign ? "" : "disabled"} placeholder="Nombre y apellidos" />
+          <label for="docRequiredField">Nombre completo del firmante</label>
+          <input id="docRequiredField" ${disabled} placeholder="Nombre y apellidos" autocomplete="name" />
         </div>
-        <label class="check-row"><input id="docConsentReview" type="checkbox" ${canSign ? "" : "disabled"} /> He leido el documento completo.</label>
-        <label class="check-row"><input id="docConsentVersion" type="checkbox" ${canSign ? "" : "disabled"} /> Confirmo que acepto la version ${document.version}.</label>
+        <label class="check-row"><input id="docConsentReview" type="checkbox" ${disabled} /> He leido el documento completo.</label>
+        <label class="check-row"><input id="docConsentVersion" type="checkbox" ${disabled} /> Confirmo que acepto la version ${escapeHtml(document.version)}.</label>
         ${isContract ? `
-          <label class="check-row"><input id="docConsentContract" type="checkbox" ${canSign ? "" : "disabled"} /> Acepto el contrato de actividad cumplimentado.</label>
-          <label class="check-row"><input id="docConsentRisk" type="checkbox" ${canSign ? "" : "disabled"} /> Acepto el Anexo 1 de riesgos de la actividad.</label>
-          <label class="check-row"><input id="docConsentParq" type="checkbox" ${canSign ? "" : "disabled"} /> Confirmo las respuestas del Anexo 2 PAR-Q.</label>
+          <label class="check-row"><input id="docConsentContract" type="checkbox" ${disabled} /> Acepto el contrato de actividad cumplimentado.</label>
+          <label class="check-row"><input id="docConsentRisk" type="checkbox" ${disabled} /> Acepto el Anexo 1 de riesgos de la actividad.</label>
+          <label class="check-row"><input id="docConsentParq" type="checkbox" ${disabled} /> Confirmo las respuestas del Anexo 2 PAR-Q.</label>
         ` : ""}
-        <label class="check-row"><input id="docConsentSignature" type="checkbox" ${canSign ? "" : "disabled"} /> Acepto realizar una firma simulada para esta prueba.</label>
+        <label class="check-row"><input id="docConsentSignature" type="checkbox" ${disabled} /> Acepto realizar una firma simulada para esta prueba.</label>
         <div class="signature-pad-wrap">
-          <label>Firma dibujada simulada</label>
-          <canvas id="signaturePad" class="signature-pad" width="640" height="220" onpointerdown="startSignatureDraw(event, '${document.id}')" onpointermove="drawSignature(event, '${document.id}')" onpointerup="endSignatureDraw(event, '${document.id}')" onpointerleave="endSignatureDraw(event, '${document.id}')"></canvas>
-          <button class="button ghost" onclick="clearSignaturePad('${document.id}')">Borrar firma</button>
+          <label for="signaturePad">Firma dibujada simulada</label>
+          <canvas id="signaturePad" class="signature-pad" width="640" height="220" role="img" aria-label="Zona de firma. Dibuja tu firma con el ratón o el dedo." onpointerdown="startSignatureDraw(event, ${documentId})" onpointermove="drawSignature(event, ${documentId})" onpointerup="endSignatureDraw(event, ${documentId})" onpointerleave="endSignatureDraw(event, ${documentId})"></canvas>
+          <button type="button" class="button ghost" onclick="clearSignaturePad(${documentId})">Borrar firma</button>
         </div>
-        <button class="button" ${canSign ? "" : "disabled"} onclick="confirmSimulatedSignature('${document.id}')">Confirmar firma simulada</button>
+        <button type="button" class="button" ${disabled} onclick="confirmSimulatedSignature(${documentId})">Confirmar firma simulada</button>
       </div>
     </div>
   `;
@@ -454,22 +466,24 @@ function renderSignatureForm({ document, state, canSign }) {
 
 function renderReceipt(document) {
   const evidence = document.evidence;
+  if (!evidence) return `<div class="receipt-box"><span class="badge green">Firmado</span><p class="muted">Justificante no disponible.</p></div>`;
+  const signedAt = evidence.signedAt ? new Date(evidence.signedAt).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" }) : "Pendiente";
   return `
     <div class="receipt-box">
       <span class="badge green">Justificante simulado</span>
       <h3>Documento firmado</h3>
       <ul class="small-list">
-        <li><span>Identificador</span><strong>${evidence.evidenceId}</strong></li>
-        <li><span>Documento</span><strong>${evidence.documentId}</strong></li>
-        <li><span>Version</span><strong>${evidence.version}</strong></li>
-        <li><span>Firmante</span><strong>${evidence.signerTutorName}</strong></li>
-        <li><span>Nombre escrito</span><strong>${evidence.signatureName || evidence.signerTutorName}</strong></li>
-        <li><span>Fecha</span><strong>${new Date(evidence.signedAt).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" })}</strong></li>
-        <li><span>Huella simulada</span><strong>${evidence.documentHash}</strong></li>
-        <li><span>Estado</span><strong>${evidence.status}</strong></li>
+        <li><span>Identificador</span><strong>${escapeHtml(evidence.evidenceId || evidence.id)}</strong></li>
+        <li><span>Documento</span><strong>${escapeHtml(evidence.documentId || document.id)}</strong></li>
+        <li><span>Version</span><strong>${escapeHtml(evidence.version || document.version)}</strong></li>
+        <li><span>Firmante</span><strong>${escapeHtml(evidence.signerTutorName || "Registro remoto")}</strong></li>
+        <li><span>Nombre escrito</span><strong>${escapeHtml(evidence.signatureName || evidence.signerTutorName || "Registro remoto")}</strong></li>
+        <li><span>Fecha</span><strong>${escapeHtml(signedAt)}</strong></li>
+        <li><span>Huella simulada</span><strong>${escapeHtml(evidence.documentHash || evidence.hash)}</strong></li>
+        <li><span>Estado</span><strong>${escapeHtml(evidence.status)}</strong></li>
       </ul>
-      ${evidence.signatureDrawing ? `<img class="signature-preview" src="${evidence.signatureDrawing}" alt="Firma dibujada simulada" />` : ""}
-      ${document.finalPdfDataUrl ? `<a class="button ghost" href="${document.finalPdfDataUrl}" download="contrato-training-kids-firmado-simulado.pdf">Descargar copia firmada simulada</a>` : ""}
+      ${isDataUrl(evidence.signatureDrawing, "image/png") ? `<img class="signature-preview" src="${escapeHtml(evidence.signatureDrawing)}" alt="Firma dibujada simulada" />` : ""}
+      ${isDataUrl(document.finalPdfDataUrl, "application/pdf") ? `<a class="button ghost" href="${escapeHtml(document.finalPdfDataUrl)}" download="contrato-training-kids-firmado-simulado.pdf">Descargar copia firmada simulada</a>` : ""}
       <p class="muted">No se ha recogido IP real ni datos tecnicos reales.</p>
     </div>
   `;
@@ -477,18 +491,19 @@ function renderReceipt(document) {
 
 function renderImmutableSnapshot(snapshot) {
   if (!snapshot) return "";
+  const pdf = isDataUrl(snapshot.pdfDataUrl, "application/pdf") ? escapeHtml(snapshot.pdfDataUrl) : "";
   return `
     <section class="panel pad fillable-panel">
       <h3>Copia inmutable firmada</h3>
       <p class="muted">Se conserva la version documental y los datos completados en el momento de la firma simulada.</p>
-      ${snapshot.pdfDataUrl ? `<object class="pdf-preview signed-preview" data="${snapshot.pdfDataUrl}" type="application/pdf"><a class="button ghost" href="${snapshot.pdfDataUrl}" target="_blank" rel="noopener">Abrir copia firmada</a></object>` : ""}
+      ${pdf ? `<object class="pdf-preview signed-preview" data="${pdf}" type="application/pdf"><a class="button ghost" href="${pdf}" target="_blank" rel="noopener">Abrir copia firmada</a></object>` : ""}
       ${renderCompletedFieldsPreview(snapshot.fieldValues)}
     </section>
   `;
 }
 
 function renderCompletedFieldsPreview(values = {}) {
-  const entries = Object.entries(values);
+  const entries = Object.entries(values || {});
   if (!entries.length) return "";
   return `
     <div class="completed-preview">
@@ -496,8 +511,8 @@ function renderCompletedFieldsPreview(values = {}) {
       <div class="grid two">
         ${entries.map(([key, item]) => `
           <div class="preview-line">
-            <span>${escapeHtml(item.label || key)}</span>
-            <strong>${escapeHtml(readableFieldValue(item.value) || "Pendiente")}</strong>
+            <span>${escapeHtml(item?.label || key)}</span>
+            <strong>${escapeHtml(readableFieldValue(item?.value ?? item) || "Pendiente")}</strong>
           </div>
         `).join("")}
       </div>
@@ -507,23 +522,25 @@ function renderCompletedFieldsPreview(values = {}) {
 
 function renderDocumentCard({ document, state, services, documentTemplates, compact = false }) {
   const template = documentTemplates.find((item) => item.id === document.templateId);
-  const child = state.family.children.find((item) => item.id === document.childId);
+  if (!template) return "";
+  const children = state.adminChildren || state.family.children;
+  const child = children.find((item) => item.id === document.childId);
   const isInfo = INFO_DOCUMENT_IDS.has(document.templateId);
   const pending = ACTION_DOCUMENT_IDS.has(document.templateId) && ["pending_complete", "pending_signature", "update_required"].includes(document.status);
   const buttonLabel = isInfo
     ? (document.templateId === "global-family-account" ? "Ver calendario" : "Ver documento")
     : document.status === "signed" ? "Ver justificante" : compact ? "Abrir" : "Abrir documento";
   return `
-    <article class="doc-card ${pending ? "needs-attention" : ""}" data-doc-id="${document.id}">
+    <article class="doc-card ${pending ? "needs-attention" : ""}" data-doc-id="${escapeHtml(document.id)}">
       <div class="badge-row">
-        <span class="badge ${isInfo ? "" : statusTone(document.status)}">${isInfo ? "Documento informativo" : statusLabel(document.status)}</span>
-        <span class="badge">${serviceName(services, document.service)}</span>
-        <span class="badge">${document.version}</span>
+        <span class="badge ${isInfo ? "" : statusTone(document.status)}">${escapeHtml(isInfo ? "Documento informativo" : statusLabel(document.status))}</span>
+        <span class="badge">${escapeHtml(serviceName(services, document.service))}</span>
+        <span class="badge">${escapeHtml(document.version)}</span>
       </div>
-      <h3>${template.title}</h3>
-      <p class="muted">${isInfo ? "Consulta general" : `${child?.name || "Cuenta familiar"} · ${document.enrollmentId || "Documento global"}`}</p>
+      <h3>${escapeHtml(template.title)}</h3>
+      <p class="muted">${isInfo ? "Consulta general" : `${escapeHtml(child?.name || "Cuenta familiar")} · ${escapeHtml(document.enrollmentId || "Documento global")}`}</p>
       ${document.requiresTeamReview ? `<div class="validation-box compact-alert">PAR-Q con respuesta afirmativa: revisar por el equipo.</div>` : ""}
-      <button class="button ${document.status === "signed" || isInfo ? "ghost" : ""}" data-action="open-document" data-doc-id="${document.id}" onclick="openDocument('${document.id}')">${buttonLabel}</button>
+      <button type="button" class="button ${document.status === "signed" || isInfo ? "ghost" : ""}" data-action="open-document" data-doc-id="${escapeHtml(document.id)}" onclick="openDocument(${jsArg(document.id)})">${buttonLabel}</button>
     </article>
   `;
 }
@@ -531,7 +548,7 @@ function renderDocumentCard({ document, state, services, documentTemplates, comp
 function activeDocumentsForChild(documents, selectedChildId) {
   const candidates = documents
     .filter((document) => ACTIVE_DOCUMENT_IDS.has(document.templateId))
-    .filter((document) => INFO_DOCUMENT_IDS.has(document.templateId) || document.childId === selectedChildId)
+    .filter((document) => INFO_DOCUMENT_IDS.has(document.templateId) || (selectedChildId && document.childId === selectedChildId))
     .sort((a, b) => activeDocumentOrder(a.templateId) - activeDocumentOrder(b.templateId));
   const byTemplate = new Map();
   candidates.forEach((document) => {
@@ -544,25 +561,13 @@ function activeDocumentOrder(templateId) {
   return ["tk-service-terms", "tk-image-rights", "tk-norms-guarantees", "global-family-account"].indexOf(templateId);
 }
 
-function sharedDataText({ document, template, child }) {
-  if (document.templateId === "tk-medical-info") {
-    return `INFORMACION MEDICA COMPARTIDA\n\nDocumento generado con los datos familiares actuales del prototipo.\n\nHijo/a: ${child?.name || "Pendiente"}\n\nInformacion medica relevante:\n\n${child?.medical || "Pendiente de completar"}\n\nEste documento sigue siendo local y simulado hasta conectar almacenamiento real.`;
-  }
-
-  if (document.templateId === "tk-emergency-contact") {
-    return `CONTACTO DE EMERGENCIA COMPARTIDO\n\nDocumento generado con los datos familiares actuales del prototipo.\n\nHijo/a: ${child?.name || "Pendiente"}\n\nContacto: ${child?.emergencyName || "Pendiente"}\n\nTelefono: ${child?.emergencyPhone || "Pendiente"}\n\nEste documento sigue siendo local y simulado hasta conectar almacenamiento real.`;
-  }
-
-  return `${template.title}\n\nDocumento visible en esta fase, sin contenido legal adicional.`;
-}
-
 function getDocumentFields({ document, state, child, enrollment, centers, groups, trainingKidsPlans }) {
   const tutor = state.family.tutors[0];
   const center = centers.find((item) => item.id === (enrollment?.centerId || state.selectedCenter));
   const group = groups.find((item) => item.id === enrollment?.groupId);
   const plan = trainingKidsPlans.find((item) => item.id === enrollment?.planId);
   const planValue = plan ? `${plan.name} · ${plan.period} · ${plan.amount} €` : "Pendiente de inscripcion";
-  const groupValue = group ? `${group.id} · ${group.day} ${group.time}` : "Pendiente de asignacion administrativa";
+  const groupValue = group ? `${group.name} · ${group.day} ${group.time}` : "Pendiente de asignacion administrativa";
   const today = new Date();
   const basePersonal = [
     field("place", "Lugar de firma", "Ajalvir", true),
@@ -610,21 +615,6 @@ function getDocumentFields({ document, state, child, enrollment, centers, groups
     ];
   }
 
-  if (document.templateId === "tk-medical-info") {
-    return [
-      field("childName", "Hijo/a", child?.name, true, true),
-      field("medicalInfo", "Informacion medica", child?.medical, true),
-    ];
-  }
-
-  if (document.templateId === "tk-emergency-contact") {
-    return [
-      field("childName", "Hijo/a", child?.name, true, true),
-      field("emergencyName", "Contacto de emergencia", child?.emergencyName, true),
-      field("emergencyPhone", "Telefono de emergencia", child?.emergencyPhone, true),
-    ];
-  }
-
   return [];
 }
 
@@ -647,17 +637,14 @@ function fieldsToValues(fields) {
   return Object.fromEntries(fields.map((field) => [field.id, { label: field.label, value: field.value || "" }]));
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+// Solo se aceptan data URLs generadas por la propia app; evita enlaces javascript: u otros esquemas.
+function isDataUrl(value, mime) {
+  return typeof value === "string" && value.startsWith(`data:${mime};base64,`);
 }
 
 function statusFilterButton(value, label, activeValue) {
-  return `<button class="side-filter ${activeValue === value ? "active" : ""}" onclick="setState({documentStatusFilter:'${value}'})">${label}</button>`;
+  const active = activeValue === value;
+  return `<button type="button" class="side-filter ${active ? "active" : ""}" aria-pressed="${active}" onclick="setState({documentStatusFilter:${jsArg(value)}})">${escapeHtml(label)}</button>`;
 }
 
 export function statusLabel(status) {
