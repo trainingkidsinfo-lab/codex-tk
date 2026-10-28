@@ -12,7 +12,7 @@ Fase C.1 usa temporalmente un magic link enviado por correo en modo test, compat
 
 Fase E sanea el frontend sin tocar Supabase: escapado sistematico de datos en plantillas, confirmacion en pagina para las decisiones administrativas, retirada de plantillas documentales obsoletas, `supabase-js` con version exacta y pruebas nuevas. Consulta `docs/FASE_E_SANEAMIENTO.md`.
 
-Fase F prepara la firma remota: RPC `family_sign_document`, subida del PDF firmado y de la imagen de la firma a buckets privados, huellas SHA-256 y fin de la insercion directa de firmas por las familias. La migracion **no esta aplicada** todavia; hasta entonces el modo test desactiva la firma con un aviso. Consulta `docs/FASE_F_FIRMA_REMOTA.md`.
+Fase F prepara la firma remota: RPC `family_sign_document`, subida del PDF firmado y de la imagen de la firma a buckets privados, huellas SHA-256 y fin de la insercion directa de firmas por las familias. Aplicada y verificada con pruebas SQL en el proyecto de pruebas nuevo. Consulta `docs/FASE_F_FIRMA_REMOTA.md` y `docs/PROYECTO_PRUEBAS.md`.
 
 ## Pruebas
 
@@ -180,5 +180,6 @@ Archivos principales:
 - `supabase/migrations/202610280001_phase_f_remote_signature.sql`: firma remota de Fase F, pendiente de aplicar.
 - `supabase/tests/phase_f_rls.sql`: pruebas manuales de la firma remota.
 - `docs/FASE_F_FIRMA_REMOTA.md`: alcance, limites y pasos para aplicar la Fase F.
+- `docs/PROYECTO_PRUEBAS.md`: proyecto Supabase de pruebas actual, que se ha cargado y como se ha verificado.
 
 No debe pegarse la `service_role` en ningun archivo frontend. Usar solo URL publica y anon public key.

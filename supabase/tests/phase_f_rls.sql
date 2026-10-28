@@ -1,8 +1,8 @@
 -- Pruebas manuales de Fase F (firma remota).
 -- Ejecutar solo tras aplicar 202610280001_phase_f_remote_signature.sql en el proyecto de pruebas.
 -- Todo ocurre dentro de una transaccion que termina en rollback: no deja datos.
--- Usa los usuarios y registros ficticios de las migraciones de Fase C ya aplicadas:
---   tutor ficticio a87bb54e-..., administrador ficticio 8266239d-...,
+-- Usa los usuarios y registros ficticios del proyecto de pruebas actual (docs/PROYECTO_PRUEBAS.md):
+--   tutor de prueba 37bbca73-..., administrador de prueba bc09a31b-... (proyecto yqvymjryecmfsoilkxgj),
 --   familia demo 99999999-..., familia de aislamiento aaaaaaaa-...-000000000002,
 --   inscripcion ficticia 77777777-...-771 (no se modifica: todo acaba en rollback).
 -- La inscripcion aaaaaaaa-...-0000000000e1 no existe a proposito: representa una ajena.
@@ -10,7 +10,7 @@
 
 begin;
 set local role authenticated;
-set local "request.jwt.claim.sub" = 'a87bb54e-9143-4290-92a4-6e919e77002e';
+set local "request.jwt.claim.sub" = '37bbca73-e898-4681-aaa5-01a15b465aa3';
 
 -- 1. Una familia ya no puede insertar firmas directamente.
 do $$ begin
@@ -85,7 +85,7 @@ end $$;
 -- Una llamada con otra huella debe fallar con document_already_signed.
 
 -- 6. Una firma registrada no se puede modificar, ni siquiera por administracion.
-set local "request.jwt.claim.sub" = '8266239d-b676-4965-be6e-342138311623';
+set local "request.jwt.claim.sub" = 'bc09a31b-2936-4466-bbe9-0868d7c53fde';
 do $$ begin
   begin
     update public.signature_records set signer_name = 'Cambio' where status = 'signed';
