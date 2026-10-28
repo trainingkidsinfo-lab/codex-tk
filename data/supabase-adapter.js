@@ -1,14 +1,15 @@
-import { assertSupabaseConfig } from "./app-config.js?v=e1";
-import { isUuid, translateDataError } from "./errors.js?v=e1";
+import { assertSupabaseConfig } from "./app-config.js?v=f1";
+import { isUuid, translateDataError } from "./errors.js?v=f1";
+import {
+  LEGACY_SIGNATURE_COLUMNS,
+  SIGNATURE_BUCKETS,
+  SIGNATURE_COLUMNS,
+  mapRemoteDocuments,
+  signRemoteDocument,
+} from "./remote-documents.js?v=f1";
 
 // Version exacta fijada (Fase E). Actualizar solo de forma deliberada y probada.
 const SUPABASE_JS_URL = "https://esm.sh/@supabase/supabase-js@2.103.0";
-const TEMPLATE_BY_CODE = {
-  activity_contract: "tk-service-terms",
-  image_authorization: "tk-image-rights",
-  rules_and_guarantees: "tk-norms-guarantees",
-  calendar_2026_2027: "global-family-account",
-};
 
 const clone = (value) => typeof structuredClone === "function"
   ? structuredClone(value)
@@ -368,7 +369,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
       supabase.from("players").select("id,first_name,last_name,birth_date,team,medical_profiles(notes),emergency_contacts(name,phone,relationship,priority)").eq("family_id", familyId).eq("active", true),
       supabase.from("enrollments").select("id,family_id,player_id,service_id,location_id,season_id,group_id,plan_id,plan_price_id,status,operational_status,review_status,review_notes,start_on,availability_requests(availability,notes)").eq("family_id", familyId),
       supabase.from("audit_log").select("id,created_at,actor_label,action,service_id").eq("family_id", familyId).order("created_at", { ascending: false }).limit(30),
-      supabase.from("signature_records").select("id,player_id,enrollment_id,document_version_id,status,signed_at,completed_data,accepted_consents,final_sha256,locked_at").eq("family_id", familyId),
+      loadSignatures(familyId),
       supabase.from("payment_orders").select("id,enrollment_id,status,amount_cents,currency,due_on,provider_customer_ref,created_at,payment_events(id,event_type,status,created_at)").eq("family_id", familyId).order("created_at", { ascending: false }),
       supabase.from("service_documents").select("id,service_id,code,title,scope,required,active,document_versions(id,version,effective_date,storage_path,status)").eq("active", true),
       supabase.from("service_groups").select("id,service_id,location_id,season_id,name,day_of_week,starts_at,ends_at,capacity,occupied_base,active").eq("active", true),
@@ -390,7 +391,8 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
       selectedPlan: plansResult.data?.flatMap((plan) => (plan.plan_prices || []).map((price) => ({ plan, price })))
         .find((item) => item.plan.service_id === "training_kids" && item.price.active && !item.price.admin_only)?.plan.id || "",
       enrollments: enrollments.map(mapEnrollment),
-      documents: mapDocuments({
+      remoteSignatureReady: !signaturesResult.legacy,
+      documents: mapRemoteDocuments({
         familyId,
         enrollments,
         serviceDocuments: documentsResult.data || [],
@@ -500,52 +502,13 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     };
   }
 
-  function mapDocuments({ familyId, enrollments, serviceDocuments, signatures }) {
-    const documents = [];
-    for (const definition of serviceDocuments) {
-      const templateId = TEMPLATE_BY_CODE[definition.code];
-      if (!templateId) continue;
-      const versions = definition.document_versions || [];
-      const version = [...versions].sort((a, b) => String(b.effective_date).localeCompare(String(a.effective_date)))[0];
-      if (!version) continue;
-      if (definition.scope === "informative") {
-        documents.push(mapDocument({ definition, version, templateId, familyId }));
-        continue;
-      }
-      for (const enrollment of enrollments.filter((item) => item.service_id === definition.service_id)) {
-        const signature = signatures.find((item) => item.enrollment_id === enrollment.id && item.document_version_id === version.id);
-        documents.push(mapDocument({ definition, version, templateId, familyId, enrollment, signature }));
-      }
-    }
-    return documents;
-  }
-
-  function mapDocument({ definition, version, templateId, familyId, enrollment, signature }) {
-    const signed = signature?.status === "signed";
-    return {
-      id: signature?.id || `remote-${version.id}-${enrollment?.id || "info"}`,
-      remoteVersionId: version.id,
-      templateId,
-      scope: definition.scope === "informative" ? "global" : "enrollment",
-      service: definition.service_id,
-      familyId,
-      childId: enrollment?.player_id || "",
-      enrollmentId: enrollment?.id || "",
-      status: definition.scope === "informative" ? "info" : signed ? "signed" : definition.required ? "pending_complete" : "pending_signature",
-      required: Boolean(definition.required),
-      title: definition.title,
-      version: version.version,
-      effectiveDate: version.effective_date,
-      signedAt: signature?.signed_at || "",
-      completedSnapshot: signature?.completed_data || null,
-      evidence: signed ? {
-        id: signature.id,
-        hash: signature.final_sha256 || "Huella remota pendiente",
-        status: signature.status,
-        signedAt: signature.signed_at,
-        consents: signature.accepted_consents || {},
-      } : null,
-    };
+  // Antes de aplicar la migracion F faltan columnas de evidencia: se lee el esquema anterior
+  // y la firma remota queda desactivada en lugar de romper toda la carga.
+  async function loadSignatures(familyId) {
+    const result = await supabase.from("signature_records").select(SIGNATURE_COLUMNS).eq("family_id", familyId);
+    if (result.error?.code !== "42703") return result;
+    const legacy = await supabase.from("signature_records").select(LEGACY_SIGNATURE_COLUMNS).eq("family_id", familyId);
+    return { ...legacy, legacy: true };
   }
 
   function mapPayment(item, enrollments) {
@@ -683,6 +646,33 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         await refreshSessionAndState();
         commit();
       });
+    },
+    async signDocument({ document, signerName, completedData, signaturePngDataUrl, pdfDataUrl }) {
+      return runOperation(`sign-document-${document.id}`, async () => {
+        if (!state.remoteSignatureReady) throw new Error("signature_schema_missing");
+        const result = await signRemoteDocument({
+          supabase,
+          familyId: state.family.id,
+          document,
+          signerName,
+          completedData,
+          signaturePngDataUrl,
+          pdfDataUrl,
+        });
+        await refreshSessionAndState();
+        state.activeView = "documents";
+        state.activeDocumentId = document.id;
+        state.signingDocumentId = "";
+        state.documentFlowSteps = { ...(state.documentFlowSteps || {}), [document.id]: "signed" };
+        commit();
+        return result;
+      });
+    },
+    async getSignedFileUrl(kind, path) {
+      const bucket = kind === "pdf" ? SIGNATURE_BUCKETS.pdf : SIGNATURE_BUCKETS.evidence;
+      const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 120);
+      if (error) throw error;
+      return data.signedUrl;
     },
     async requestLoginLink(email) {
       if (!supabase) throw new Error(state.connectionError || "Supabase no esta disponible.");

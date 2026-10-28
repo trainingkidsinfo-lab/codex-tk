@@ -12,6 +12,8 @@ Fase C.1 usa temporalmente un magic link enviado por correo en modo test, compat
 
 Fase E sanea el frontend sin tocar Supabase: escapado sistematico de datos en plantillas, confirmacion en pagina para las decisiones administrativas, retirada de plantillas documentales obsoletas, `supabase-js` con version exacta y pruebas nuevas. Consulta `docs/FASE_E_SANEAMIENTO.md`.
 
+Fase F prepara la firma remota: RPC `family_sign_document`, subida del PDF firmado y de la imagen de la firma a buckets privados, huellas SHA-256 y fin de la insercion directa de firmas por las familias. La migracion **no esta aplicada** todavia; hasta entonces el modo test desactiva la firma con un aviso. Consulta `docs/FASE_F_FIRMA_REMOTA.md`.
+
 ## Pruebas
 
 Con Node 20 o superior:
@@ -69,6 +71,7 @@ tk-platform-v1/
     mock-data.js
     local-adapter.js
     supabase-adapter.js
+    remote-documents.js
     app-config.js
   supabase/
     migrations/
@@ -103,6 +106,7 @@ tk-platform-v1/
 - `areas/gym-home.js`: modulo futuro, sin contratacion ni reservas en esta fase.
 - `areas/documents.js`: area documental y firma simulada preparada para adaptador real.
 - `ui/shared.js`: piezas comunes reutilizables como cabecera, nombres, tarjetas de grupo y avisos.
+- `data/remote-documents.js`: firma remota (subida de archivos, huellas y RPC) y mapeo de documentos de Supabase.
 - `ui/escape.js`: escapado obligatorio para cualquier dato insertado en plantillas HTML (`escapeHtml`) o en manejadores inline (`jsArg`).
 
 ## Conectado en modo test
@@ -173,5 +177,8 @@ Archivos principales:
 - `supabase/migrations/202609230001_phase_d_family_operations.sql`: RPC y permisos de escritura de Fase D, aplicada en pruebas.
 - `supabase/functions/prepare-family-access/index.ts`: backend seguro preparado y aun no desplegado para altas familiares.
 - `docs/FASE_D_OPERATIVA.md`: roles, flujos, estado verificado y paso manual.
+- `supabase/migrations/202610280001_phase_f_remote_signature.sql`: firma remota de Fase F, pendiente de aplicar.
+- `supabase/tests/phase_f_rls.sql`: pruebas manuales de la firma remota.
+- `docs/FASE_F_FIRMA_REMOTA.md`: alcance, limites y pasos para aplicar la Fase F.
 
 No debe pegarse la `service_role` en ningun archivo frontend. Usar solo URL publica y anon public key.
