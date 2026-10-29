@@ -1,13 +1,14 @@
-import { assertSupabaseConfig } from "./app-config.js?v=h1";
-import { isUuid, translateDataError } from "./errors.js?v=h1";
+import { assertSupabaseConfig } from "./app-config.js?v=i2";
+import { isUuid, translateDataError } from "./errors.js?v=i2";
 import {
   LEGACY_SIGNATURE_COLUMNS,
   SIGNATURE_BUCKETS,
   SIGNATURE_COLUMNS,
   mapRemoteDocuments,
   signRemoteDocument,
-} from "./remote-documents.js?v=h1";
-import { LEGACY_PAYMENT_COLUMNS, PAYMENT_COLUMNS, PAYMENT_RESULTS, mapRemotePayment } from "./remote-payments.js?v=h1";
+} from "./remote-documents.js?v=i2";
+import { INTEREST_COLUMNS, isMissingRelation, mapInterestToEnrollment } from "./remote-interest.js?v=i2";
+import { LEGACY_PAYMENT_COLUMNS, PAYMENT_COLUMNS, PAYMENT_RESULTS, mapRemotePayment } from "./remote-payments.js?v=i2";
 
 // Version exacta fijada (Fase E). Actualizar solo de forma deliberada y probada.
 const SUPABASE_JS_URL = "https://esm.sh/@supabase/supabase-js@2.103.0";
@@ -382,6 +383,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     if (failure) throw failure.error;
     const [familyResult, membersResult, playersResult, enrollmentsResult, auditResult, signaturesResult, paymentsResult, documentsResult, groupsResult, locationsResult, plansResult, seasonsResult] = results;
     const occupancy = await loadGroupOccupancy();
+    const interest = await loadInterest(familyId);
     const family = familyResult.data;
     const players = playersResult.data || [];
     const enrollments = enrollmentsResult.data || [];
@@ -392,7 +394,8 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
       selectedCenter: locationsResult.data?.find((item) => item.service_id === "training_kids")?.id || "",
       selectedPlan: plansResult.data?.flatMap((plan) => (plan.plan_prices || []).map((price) => ({ plan, price })))
         .find((item) => item.plan.service_id === "training_kids" && item.price.active && !item.price.admin_only)?.plan.id || "",
-      enrollments: enrollments.map(mapEnrollment),
+      enrollments: [...enrollments.map(mapEnrollment), ...interest.rows.map(mapInterestToEnrollment)],
+      remoteInterestReady: interest.ready,
       remoteSignatureReady: !signaturesResult.legacy,
       documents: mapRemoteDocuments({
         familyId,
@@ -514,6 +517,18 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     if (result.error?.code !== "42703") return result;
     const legacy = await supabase.from("signature_records").select(LEGACY_SIGNATURE_COLUMNS).eq("family_id", familyId);
     return { ...legacy, legacy: true };
+  }
+
+  // Antes de aplicar la migracion I no existe la tabla de prealtas: no se muestran y
+  // registrar interes queda desactivado.
+  async function loadInterest(familyId) {
+    const { data, error } = await supabase.from("service_interest_requests").select(INTEREST_COLUMNS)
+      .eq("family_id", familyId).order("created_at", { ascending: false });
+    if (error) {
+      if (isMissingRelation(error)) return { ready: false, rows: [] };
+      throw error;
+    }
+    return { ready: true, rows: data || [] };
   }
 
   // Antes de aplicar la migracion H no existe group_occupancy: se usa el recuento local
@@ -703,6 +718,34 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     },
     async withdrawEnrollment(enrollmentId, reason = "") {
       return runEnrollmentOperation(`withdraw-${enrollmentId}`, "admin_withdraw_enrollment", { p_enrollment_id: enrollmentId, p_reason: reason || null });
+    },
+    async registerInterest(playerId, serviceId, notes = "") {
+      return runOperation(`register-interest-${playerId}-${serviceId}`, async () => {
+        if (!state.remoteInterestReady) throw new Error("interest_schema_missing");
+        const { error } = await supabase.rpc("family_register_interest", {
+          p_player_id: playerId,
+          p_service_id: serviceId,
+          p_notes: notes || null,
+        });
+        if (error) throw error;
+        await refreshSessionAndState();
+        state.selectedChildId = playerId;
+        state.familyStep = 5;
+        commit();
+      });
+    },
+    async updateInterest(requestId, status, adminNotes = "") {
+      return runOperation(`update-interest-${requestId}`, async () => {
+        if (!state.remoteInterestReady) throw new Error("interest_schema_missing");
+        const { error } = await supabase.rpc("admin_update_interest", {
+          p_request_id: requestId,
+          p_status: status,
+          p_admin_notes: adminNotes || null,
+        });
+        if (error) throw error;
+        await refreshSessionAndState();
+        commit();
+      });
     },
     async getSignedFileUrl(kind, path) {
       const bucket = kind === "pdf" ? SIGNATURE_BUCKETS.pdf : SIGNATURE_BUCKETS.evidence;

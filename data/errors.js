@@ -34,6 +34,11 @@ const ERROR_MESSAGES = [
   [/enrollment_not_ready: (.+)/i, (match) => `No se puede activar todavía. ${match[1]}.`],
   [/group_full/i, "El grupo ya está lleno."],
   [/enrollment_withdrawn/i, "Esta inscripción está dada de baja."],
+  [/interest_schema_missing/i, "La prealta estará disponible cuando se aplique la migración de la Fase I."],
+  [/service_not_in_prelaunch/i, "Este servicio no admite prealtas ahora mismo."],
+  [/interest_closed/i, "Esta prealta ya está cerrada."],
+  [/interest_not_found/i, "No se encontró la prealta."],
+  [/notes_too_long/i, "El texto es demasiado largo."],
   [/duplicate key|unique constraint/i, "Ya existe un registro equivalente."],
   [/failed to fetch|network/i, "No se pudo conectar. Comprueba tu conexión y vuelve a intentarlo."],
 ];

@@ -1,5 +1,5 @@
-import { centerName, planName, renderGroupCard } from "../ui/shared.js?v=h1";
-import { escapeHtml, jsArg } from "../ui/escape.js?v=h1";
+import { centerName, planName, renderGroupCard } from "../ui/shared.js?v=i2";
+import { escapeHtml, jsArg } from "../ui/escape.js?v=i2";
 
 export function renderTrainingKidsEnrollment({ state, child, centers, groups, services, trainingKidsPlans }) {
   const availableCenters = centers.filter((center) => center.services.includes("training_kids"));

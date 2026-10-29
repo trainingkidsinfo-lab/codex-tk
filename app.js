@@ -10,22 +10,22 @@ import {
   stepLabels,
   steps,
   trainingKidsPlans,
-} from "./data/mock-data.js?v=h1";
-import { loadAppConfig } from "./data/app-config.js?v=h1";
-import { createLocalDataAdapter } from "./data/local-adapter.js?v=h1";
-import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=h1";
-import { translateDataError } from "./data/errors.js?v=h1";
-import { renderAuth, renderLoading } from "./areas/access.js?v=h1";
-import { renderAdmin } from "./areas/admin.js?v=h1";
-import { renderDesign } from "./areas/design.js?v=h1";
-import { renderDocuments } from "./areas/documents.js?v=h1";
-import { renderFamily } from "./areas/family.js?v=h1";
-import { getEnrollmentReview } from "./areas/enrollment-review.js?v=h1";
-import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=h1";
-import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=h1";
-import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=h1";
-import { renderPayments } from "./areas/payments.js?v=h1";
-import { appChrome, serviceName, toast } from "./ui/shared.js?v=h1";
+} from "./data/mock-data.js?v=i2";
+import { loadAppConfig } from "./data/app-config.js?v=i2";
+import { createLocalDataAdapter } from "./data/local-adapter.js?v=i2";
+import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=i2";
+import { translateDataError } from "./data/errors.js?v=i2";
+import { renderAuth, renderLoading } from "./areas/access.js?v=i2";
+import { renderAdmin } from "./areas/admin.js?v=i2";
+import { renderDesign } from "./areas/design.js?v=i2";
+import { renderDocuments } from "./areas/documents.js?v=i2";
+import { renderFamily } from "./areas/family.js?v=i2";
+import { getEnrollmentReview } from "./areas/enrollment-review.js?v=i2";
+import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=i2";
+import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=i2";
+import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=i2";
+import { renderPayments } from "./areas/payments.js?v=i2";
+import { appChrome, serviceName, toast } from "./ui/shared.js?v=i2";
 
 const appConfig = loadAppConfig();
 const adapter = appConfig.isSupabaseTest
@@ -268,6 +268,11 @@ async function saveSelectedChild() {
 function selectService(serviceId) {
   if (serviceId === "gym_home") return;
 
+  if (serviceId === "football_academy" && adapter.isRemote) {
+    registerFootballInterest();
+    return;
+  }
+
   if (serviceId === "football_academy") {
     adapter.mutate((state) => {
       const exists = state.enrollments.some((item) => item.childId === state.selectedChildId && item.service === "football_academy");
@@ -288,6 +293,34 @@ function selectService(serviceId) {
   }
 
   setState({ selectedService: serviceId, familyStep: 4 });
+}
+
+async function registerFootballInterest() {
+  const state = getState();
+  const child = getChild();
+  if (!child) return toast("Elige primero un hijo.");
+  const existing = state.enrollments.find((item) => item.interest && item.childId === child.id && item.service === "football_academy" && item.interestStatus !== "closed");
+  if (existing) {
+    adapter.setState({ familyStep: 5 });
+    return toast("La prealta de Football Academy ya estaba registrada.");
+  }
+  try {
+    await adapter.registerInterest(child.id, "football_academy");
+    toast("Prealta de Football Academy registrada.");
+  } catch (error) {
+    toast(translateDataError(error, "No se pudo registrar la prealta."));
+  }
+}
+
+async function updateFootballInterest(requestId, status) {
+  if (!adapter.isRemote) return;
+  if (!["contacted", "closed"].includes(status)) return;
+  try {
+    await adapter.updateInterest(requestId, status);
+    toast(status === "contacted" ? "Prealta marcada como contactada." : "Prealta cerrada.");
+  } catch (error) {
+    toast(translateDataError(error, "No se pudo actualizar la prealta."));
+  }
 }
 
 async function saveTrainingEnrollment() {
@@ -765,6 +798,7 @@ function simulateTrainingKidsPayment(paymentId, result) {
 }
 
 function markFootballInterest(enrollmentId) {
+  if (adapter.isRemote) return updateFootballInterest(enrollmentId, "contacted");
   adapter.mutate((state) => {
     const enrollment = state.enrollments.find((item) => item.id === enrollmentId);
     if (!enrollment) return;
@@ -778,6 +812,7 @@ function markFootballInterest(enrollmentId) {
       service: "Football Academy",
     });
   });
+  window.setTimeout(() => toast("Contacto de Football Academy marcado (simulacion)."), 100);
 }
 
 function openDocument(documentId) {
@@ -1312,6 +1347,7 @@ window.simulateTrainingKidsPayment = simulateTrainingKidsPayment;
 window.requestPaymentResult = requestPaymentResult;
 window.requestPaymentPreparation = requestPaymentPreparation;
 window.markFootballInterest = markFootballInterest;
+window.updateFootballInterest = updateFootballInterest;
 window.openDocument = openDocument;
 window.setDocumentStep = setDocumentStep;
 window.continueDocumentReview = continueDocumentReview;

@@ -18,6 +18,8 @@ Fase G prepara pagos de prueba sin Stripe: al aprobar una solicitud el servidor 
 
 Fase H lleva al servidor la activacion: solo se activa una inscripcion con solicitud aprobada, datos completos, contrato firmado, grupo con plaza y pago confirmado. Incluye asignar grupo, dar de baja y la ocupacion de grupos. Consulta `docs/FASE_H_ESTADOS.md`.
 
+Fase I guarda en el servidor la prealta de Football Academy, separada de las inscripciones y sin cobros. Administracion la marca como contactada o cerrada. Consulta `docs/FASE_I_PREALTA_FA.md`.
+
 ## Pruebas
 
 Con Node 20 o superior:
@@ -188,6 +190,8 @@ Archivos principales:
 - `docs/FASE_G_PAGOS.md`: reglas, limites y verificacion de la Fase G.
 - `supabase/migrations/202610290002_phase_h_operational_status.sql`: requisitos, grupo, activacion y baja en el servidor.
 - `docs/FASE_H_ESTADOS.md`: reglas y verificacion de la Fase H.
+- `supabase/migrations/202610290003_phase_i_football_interest.sql`: prealtas de Football Academy en tabla propia.
+- `docs/FASE_I_PREALTA_FA.md`: reglas y verificacion de la Fase I.
 - `docs/FASE_F_FIRMA_REMOTA.md`: alcance, limites y pasos para aplicar la Fase F.
 - `docs/PROYECTO_PRUEBAS.md`: proyecto Supabase de pruebas actual, que se ha cargado y como se ha verificado.
 
