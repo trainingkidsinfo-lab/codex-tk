@@ -1,6 +1,6 @@
-import { serviceName } from "../ui/shared.js?v=e1";
-import { escapeHtml, jsArg } from "../ui/escape.js?v=e1";
-import { parqQuestions } from "./pdf-generator.js?v=e1";
+import { serviceName } from "../ui/shared.js?v=f1";
+import { escapeHtml, jsArg } from "../ui/escape.js?v=f1";
+import { parqQuestions } from "./pdf-generator.js?v=f1";
 
 // Documentos vigentes en el flujo activo. Cualquier otra plantilla queda fuera.
 const ACTION_DOCUMENT_IDS = new Set(["tk-service-terms", "tk-image-rights"]);
@@ -28,7 +28,9 @@ export function renderDocuments(context) {
       <div class="hero-content">
         <p class="eyebrow">Area documental</p>
         <h1>Documentos y firma</h1>
-        <p class="muted">Flujo simulado para revisar, completar y firmar documentos. Usa textos aportados, pero firma, auditoria y almacenamiento siguen sin validez de produccion.</p>
+        <p class="muted">${state.appMode === "test"
+          ? "Revisa, completa y firma los documentos. La firma se guarda en el proyecto de pruebas con huella SHA-256 y auditoria, sin validez juridica."
+          : "Flujo simulado para revisar, completar y firmar documentos. Usa textos aportados, pero firma, auditoria y almacenamiento siguen sin validez de produccion."}</p>
       </div>
       <div class="hero-side">
         <div class="hero-pill">${signedActionable} firmados</div>
@@ -129,7 +131,7 @@ function renderDocumentDetail({ document, state, services, documentTemplates, le
         </div>
         <button type="button" class="button ghost" onclick="setState({activeDocumentId:''})">Cerrar</button>
       </div>
-      <div class="document-warning">${escapeHtml(document.validationNote || template.reviewFlag || "Textos definitivos aportados.")} Firma, almacenamiento, auditoria y justificante siguen siendo simulados.</div>
+      <div class="document-warning">${escapeHtml(document.validationNote || template.reviewFlag || "Textos definitivos aportados.")} ${state.appMode === "test" ? "La firma queda registrada en el proyecto de pruebas, sin validez juridica." : "Firma, almacenamiento, auditoria y justificante siguen siendo simulados."}</div>
       ${renderDocumentFlowSteps(flowStep)}
       <div class="grid two">
         <div class="demo-document">
@@ -470,7 +472,7 @@ function renderReceipt(document) {
   const signedAt = evidence.signedAt ? new Date(evidence.signedAt).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" }) : "Pendiente";
   return `
     <div class="receipt-box">
-      <span class="badge green">Justificante simulado</span>
+      <span class="badge green">${evidence.remote ? "Justificante de prueba" : "Justificante simulado"}</span>
       <h3>Documento firmado</h3>
       <ul class="small-list">
         <li><span>Identificador</span><strong>${escapeHtml(evidence.evidenceId || evidence.id)}</strong></li>
@@ -479,12 +481,26 @@ function renderReceipt(document) {
         <li><span>Firmante</span><strong>${escapeHtml(evidence.signerTutorName || "Registro remoto")}</strong></li>
         <li><span>Nombre escrito</span><strong>${escapeHtml(evidence.signatureName || evidence.signerTutorName || "Registro remoto")}</strong></li>
         <li><span>Fecha</span><strong>${escapeHtml(signedAt)}</strong></li>
-        <li><span>Huella simulada</span><strong>${escapeHtml(evidence.documentHash || evidence.hash)}</strong></li>
+        <li><span>${evidence.remote ? "Huella SHA-256" : "Huella simulada"}</span><strong>${escapeHtml(evidence.documentHash || evidence.hash)}</strong></li>
+        ${evidence.imageDecision ? `<li><span>Uso de imagen</span><strong>${evidence.imageDecision === "authorize" ? "Autorizo" : "No autorizo"}</strong></li>` : ""}
         <li><span>Estado</span><strong>${escapeHtml(evidence.status)}</strong></li>
       </ul>
       ${isDataUrl(evidence.signatureDrawing, "image/png") ? `<img class="signature-preview" src="${escapeHtml(evidence.signatureDrawing)}" alt="Firma dibujada simulada" />` : ""}
       ${isDataUrl(document.finalPdfDataUrl, "application/pdf") ? `<a class="button ghost" href="${escapeHtml(document.finalPdfDataUrl)}" download="contrato-training-kids-firmado-simulado.pdf">Descargar copia firmada simulada</a>` : ""}
+      ${renderSignedFileButtons(document)}
       <p class="muted">No se ha recogido IP real ni datos tecnicos reales.</p>
+    </div>
+  `;
+}
+
+function renderSignedFileButtons(document) {
+  const evidence = document.evidence;
+  if (!evidence?.remote) return "";
+  const id = jsArg(document.id);
+  return `
+    <div class="actions">
+      ${evidence.finalStoragePath ? `<button type="button" class="button ghost" onclick="openSignedFile(${id}, 'pdf')">Ver PDF firmado</button>` : ""}
+      ${evidence.evidenceStoragePath ? `<button type="button" class="button ghost" onclick="openSignedFile(${id}, 'evidence')">Ver imagen de la firma</button>` : ""}
     </div>
   `;
 }
@@ -541,6 +557,7 @@ function renderDocumentCard({ document, state, services, documentTemplates, comp
       <p class="muted">${isInfo ? "Consulta general" : `${escapeHtml(child?.name || "Cuenta familiar")} · ${escapeHtml(document.enrollmentId || "Documento global")}`}</p>
       ${document.requiresTeamReview ? `<div class="validation-box compact-alert">PAR-Q con respuesta afirmativa: revisar por el equipo.</div>` : ""}
       <button type="button" class="button ${document.status === "signed" || isInfo ? "ghost" : ""}" data-action="open-document" data-doc-id="${escapeHtml(document.id)}" onclick="openDocument(${jsArg(document.id)})">${buttonLabel}</button>
+      ${compact ? renderSignedFileButtons(document) : ""}
     </article>
   `;
 }

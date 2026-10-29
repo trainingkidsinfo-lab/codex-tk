@@ -1,5 +1,5 @@
-import { centerName, planName, serviceName } from "../ui/shared.js?v=e1";
-import { escapeHtml, jsArg } from "../ui/escape.js?v=e1";
+import { centerName, planName, serviceName } from "../ui/shared.js?v=f1";
+import { escapeHtml, jsArg } from "../ui/escape.js?v=f1";
 
 export const paymentStatusMeta = {
   pending: { label: "Pendiente", tone: "yellow" },

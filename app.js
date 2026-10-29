@@ -10,22 +10,22 @@ import {
   stepLabels,
   steps,
   trainingKidsPlans,
-} from "./data/mock-data.js?v=e1";
-import { loadAppConfig } from "./data/app-config.js?v=e1";
-import { createLocalDataAdapter } from "./data/local-adapter.js?v=e1";
-import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=e1";
-import { translateDataError } from "./data/errors.js?v=e1";
-import { renderAuth, renderLoading } from "./areas/access.js?v=e1";
-import { renderAdmin } from "./areas/admin.js?v=e1";
-import { renderDesign } from "./areas/design.js?v=e1";
-import { renderDocuments } from "./areas/documents.js?v=e1";
-import { renderFamily } from "./areas/family.js?v=e1";
-import { getEnrollmentReview } from "./areas/enrollment-review.js?v=e1";
-import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=e1";
-import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=e1";
-import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=e1";
-import { renderPayments } from "./areas/payments.js?v=e1";
-import { appChrome, serviceName, toast } from "./ui/shared.js?v=e1";
+} from "./data/mock-data.js?v=f1";
+import { loadAppConfig } from "./data/app-config.js?v=f1";
+import { createLocalDataAdapter } from "./data/local-adapter.js?v=f1";
+import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=f1";
+import { translateDataError } from "./data/errors.js?v=f1";
+import { renderAuth, renderLoading } from "./areas/access.js?v=f1";
+import { renderAdmin } from "./areas/admin.js?v=f1";
+import { renderDesign } from "./areas/design.js?v=f1";
+import { renderDocuments } from "./areas/documents.js?v=f1";
+import { renderFamily } from "./areas/family.js?v=f1";
+import { getEnrollmentReview } from "./areas/enrollment-review.js?v=f1";
+import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=f1";
+import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=f1";
+import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=f1";
+import { renderPayments } from "./areas/payments.js?v=f1";
+import { appChrome, serviceName, toast } from "./ui/shared.js?v=f1";
 
 const appConfig = loadAppConfig();
 const adapter = appConfig.isSupabaseTest
@@ -958,6 +958,9 @@ function confirmSimulatedSignature(documentId) {
     return toast("Acepta contrato, Anexo 1 y Anexo 2 PAR-Q.");
   }
   if (!signatureDrawing) return toast("Dibuja la firma simulada.");
+  if (adapter.isRemote && !stateBefore.remoteSignatureReady) {
+    return showSignatureValidation(translateDataError(new Error("signature_schema_missing")));
+  }
 
   const fieldValues = collectDocumentFieldValues() || docBefore.formDraft;
   const finalize = async () => {
@@ -972,6 +975,24 @@ function confirmSimulatedSignature(documentId) {
         signatureDrawing,
         signed: true,
       });
+    }
+
+    if (adapter.isRemote) {
+      try {
+        await adapter.signDocument({
+          document: docBefore,
+          signerName: requiredField,
+          completedData: fieldValues,
+          signaturePngDataUrl: signatureDrawing,
+          pdfDataUrl: finalPdf?.dataUrl || "",
+        });
+      } catch (error) {
+        showSignatureValidation(translateDataError(error, "No se pudo registrar la firma. Vuelve a intentarlo."));
+        return;
+      }
+      delete signatureDrafts[documentId];
+      window.setTimeout(() => toast("Firma registrada en el proyecto de pruebas."), 100);
+      return;
     }
 
   adapter.mutate((state) => {
@@ -1041,6 +1062,26 @@ function confirmSimulatedSignature(documentId) {
   window.setTimeout(() => toast("Firma simulada registrada."), 100);
   };
   finalize().catch((error) => showSignatureValidation(`No se pudo cerrar la copia firmada: ${error.message}`));
+}
+
+async function openSignedFile(documentId, kind) {
+  const doc = getState().documents.find((item) => item.id === documentId);
+  const path = kind === "pdf" ? doc?.evidence?.finalStoragePath : doc?.evidence?.evidenceStoragePath;
+  if (!adapter.isRemote || !path) return toast("Archivo firmado no disponible.");
+  // Se abre la ventana antes de esperar a Supabase para que el navegador no la bloquee.
+  const opened = window.open("", "_blank");
+  try {
+    const url = await adapter.getSignedFileUrl(kind, path);
+    if (opened) {
+      opened.opener = null;
+      opened.location.href = url;
+    } else {
+      window.location.assign(url);
+    }
+  } catch (error) {
+    opened?.close();
+    toast(translateDataError(error, "No se pudo abrir el archivo firmado."));
+  }
 }
 
 function syncSharedChildDataFromDocument(state, doc, fieldValues = {}) {
@@ -1191,6 +1232,7 @@ window.drawSignature = drawSignature;
 window.endSignatureDraw = endSignatureDraw;
 window.clearSignaturePad = clearSignaturePad;
 window.confirmSimulatedSignature = confirmSimulatedSignature;
+window.openSignedFile = openSignedFile;
 window.simulateTutor = simulateTutor;
 window.simulateChild = simulateChild;
 
