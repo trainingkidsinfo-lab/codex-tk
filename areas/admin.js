@@ -1,9 +1,9 @@
-import { centerName, planName, serviceName } from "../ui/shared.js?v=f1";
-import { escapeHtml, jsArg } from "../ui/escape.js?v=f1";
-import { renderAdminDocuments } from "./documents.js?v=f1";
-import { getEnrollmentReview } from "./enrollment-review.js?v=f1";
-import { getEnrollmentOperationalSummary, getGroupOccupancy } from "./operational-status.js?v=f1";
-import { renderAdminPayments } from "./payments.js?v=f1";
+import { centerName, planName, serviceName } from "../ui/shared.js?v=g1";
+import { escapeHtml, jsArg } from "../ui/escape.js?v=g1";
+import { renderAdminDocuments } from "./documents.js?v=g1";
+import { getEnrollmentReview } from "./enrollment-review.js?v=g1";
+import { getEnrollmentOperationalSummary, getGroupOccupancy } from "./operational-status.js?v=g1";
+import { renderAdminPayments } from "./payments.js?v=g1";
 
 export function renderAdmin({ state, services, centers, groups, trainingKidsPlans, documentTemplates, legalDocumentSources }) {
   const filter = state.adminServiceFilter;

@@ -1,12 +1,13 @@
-import { assertSupabaseConfig } from "./app-config.js?v=f1";
-import { isUuid, translateDataError } from "./errors.js?v=f1";
+import { assertSupabaseConfig } from "./app-config.js?v=g1";
+import { isUuid, translateDataError } from "./errors.js?v=g1";
 import {
   LEGACY_SIGNATURE_COLUMNS,
   SIGNATURE_BUCKETS,
   SIGNATURE_COLUMNS,
   mapRemoteDocuments,
   signRemoteDocument,
-} from "./remote-documents.js?v=f1";
+} from "./remote-documents.js?v=g1";
+import { LEGACY_PAYMENT_COLUMNS, PAYMENT_COLUMNS, PAYMENT_RESULTS, mapRemotePayment } from "./remote-payments.js?v=g1";
 
 // Version exacta fijada (Fase E). Actualizar solo de forma deliberada y probada.
 const SUPABASE_JS_URL = "https://esm.sh/@supabase/supabase-js@2.103.0";
@@ -370,7 +371,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
       supabase.from("enrollments").select("id,family_id,player_id,service_id,location_id,season_id,group_id,plan_id,plan_price_id,status,operational_status,review_status,review_notes,start_on,availability_requests(availability,notes)").eq("family_id", familyId),
       supabase.from("audit_log").select("id,created_at,actor_label,action,service_id").eq("family_id", familyId).order("created_at", { ascending: false }).limit(30),
       loadSignatures(familyId),
-      supabase.from("payment_orders").select("id,enrollment_id,status,amount_cents,currency,due_on,provider_customer_ref,created_at,payment_events(id,event_type,status,created_at)").eq("family_id", familyId).order("created_at", { ascending: false }),
+      loadPayments(familyId),
       supabase.from("service_documents").select("id,service_id,code,title,scope,required,active,document_versions(id,version,effective_date,storage_path,status)").eq("active", true),
       supabase.from("service_groups").select("id,service_id,location_id,season_id,name,day_of_week,starts_at,ends_at,capacity,occupied_base,active").eq("active", true),
       supabase.from("service_locations").select("id,service_id,name,city,owner_type,active").eq("active", true),
@@ -398,7 +399,8 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         serviceDocuments: documentsResult.data || [],
         signatures: signaturesResult.data || [],
       }),
-      payments: (paymentsResult.data || []).map((item) => mapPayment(item, enrollments)),
+      remotePaymentsReady: !paymentsResult.legacy,
+      payments: (paymentsResult.data || []).map((item) => mapRemotePayment(item, enrollments)),
       audit: (auditResult.data || []).map(mapAudit),
       remoteCatalog: {
         groups: (groupsResult.data || []).map((group) => ({
@@ -511,22 +513,13 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     return { ...legacy, legacy: true };
   }
 
-  function mapPayment(item, enrollments) {
-    const enrollment = enrollments.find((candidate) => candidate.id === item.enrollment_id);
-    return {
-      id: item.id,
-      enrollmentId: item.enrollment_id,
-      childId: enrollment?.player_id || "",
-      service: enrollment?.service_id || "training_kids",
-      centerId: enrollment?.location_id || "",
-      planId: enrollment?.plan_id || "",
-      period: "Registro remoto",
-      status: item.status,
-      nextDueLabel: item.due_on || "Sin vencimiento definido",
-      lineItems: [{ label: "Total registrado", amount: money(item.amount_cents) }],
-      receipt: item.status === "paid" ? { id: item.id, createdAt: item.created_at, amount: money(item.amount_cents) } : null,
-      remote: true,
-    };
+  // Antes de aplicar la migracion G faltan columnas de pago: se lee el esquema anterior
+  // y las acciones de pago quedan desactivadas en lugar de romper la carga.
+  async function loadPayments(familyId) {
+    const query = (columns) => supabase.from("payment_orders").select(columns).eq("family_id", familyId).order("created_at", { ascending: false });
+    const result = await query(PAYMENT_COLUMNS);
+    if (result.error?.code !== "42703") return result;
+    return { ...(await query(LEGACY_PAYMENT_COLUMNS)), legacy: true };
   }
 
   function mapAudit(item) {
@@ -666,6 +659,29 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         state.documentFlowSteps = { ...(state.documentFlowSteps || {}), [document.id]: "signed" };
         commit();
         return result;
+      });
+    },
+    async recordPayment(paymentId, result, note = "") {
+      if (!PAYMENT_RESULTS.includes(result)) throw new Error("payment_result_invalid");
+      return runOperation(`record-payment-${paymentId}`, async () => {
+        if (!state.remotePaymentsReady) throw new Error("payment_schema_missing");
+        const { error } = await supabase.rpc("admin_record_payment", {
+          p_payment_order_id: paymentId,
+          p_result: result,
+          p_note: note || null,
+        });
+        if (error) throw error;
+        await refreshSessionAndState();
+        commit();
+      });
+    },
+    async preparePayment(enrollmentId) {
+      return runOperation(`prepare-payment-${enrollmentId}`, async () => {
+        if (!state.remotePaymentsReady) throw new Error("payment_schema_missing");
+        const { error } = await supabase.rpc("admin_prepare_payment_order", { p_enrollment_id: enrollmentId });
+        if (error) throw error;
+        await refreshSessionAndState();
+        commit();
       });
     },
     async getSignedFileUrl(kind, path) {

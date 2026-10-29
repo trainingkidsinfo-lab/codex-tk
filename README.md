@@ -14,6 +14,8 @@ Fase E sanea el frontend sin tocar Supabase: escapado sistematico de datos en pl
 
 Fase F prepara la firma remota: RPC `family_sign_document`, subida del PDF firmado y de la imagen de la firma a buckets privados, huellas SHA-256 y fin de la insercion directa de firmas por las familias. Aplicada y verificada con pruebas SQL en el proyecto de pruebas nuevo. Consulta `docs/FASE_F_FIRMA_REMOTA.md` y `docs/PROYECTO_PRUEBAS.md`.
 
+Fase G prepara pagos de prueba sin Stripe: al aprobar una solicitud el servidor calcula el pago inicial con la tarifa y, una sola vez por familia, la matricula. Administracion registra pagado, fallido o cancelado con recibo de prueba. Consulta `docs/FASE_G_PAGOS.md`.
+
 ## Pruebas
 
 Con Node 20 o superior:
@@ -180,6 +182,8 @@ Archivos principales:
 - `supabase/migrations/202610280001_phase_f_remote_signature.sql`: firma remota de Fase F, pendiente de aplicar.
 - `supabase/tests/phase_f_rls.sql`: pruebas manuales de la firma remota.
 - `supabase/migrations/202610280002_harden_function_grants.sql`: sin ejecucion de funciones sin sesion y sin fuga de familia por jugador. Aplicada en pruebas.
+- `supabase/migrations/202610290001_phase_g_payments.sql`: pagos de prueba de Fase G. Matricula una sola vez por familia.
+- `docs/FASE_G_PAGOS.md`: reglas, limites y verificacion de la Fase G.
 - `docs/FASE_F_FIRMA_REMOTA.md`: alcance, limites y pasos para aplicar la Fase F.
 - `docs/PROYECTO_PRUEBAS.md`: proyecto Supabase de pruebas actual, que se ha cargado y como se ha verificado.
 

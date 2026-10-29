@@ -1,5 +1,6 @@
-import { centerName, planName, serviceName } from "../ui/shared.js?v=f1";
-import { escapeHtml, jsArg } from "../ui/escape.js?v=f1";
+import { centerName, planName, serviceName } from "../ui/shared.js?v=g1";
+import { escapeHtml, jsArg } from "../ui/escape.js?v=g1";
+import { canPrepareNewPayment } from "../data/remote-payments.js?v=g1";
 
 export const paymentStatusMeta = {
   pending: { label: "Pendiente", tone: "yellow" },
@@ -10,12 +11,15 @@ export const paymentStatusMeta = {
 
 export function renderPayments({ state, services, centers, trainingKidsPlans }) {
   const payments = state.payments.filter((payment) => payment.service === "training_kids");
+  const testMode = state.appMode === "test";
   return `
     <section class="hero-band">
       <div class="hero-content">
-        <p class="eyebrow">Pagos simulados</p>
+        <p class="eyebrow">${testMode ? "Pagos de prueba" : "Pagos simulados"}</p>
         <h1>Pagos Training Kids</h1>
-        <p class="muted">Recorrido local de prueba. No hay Stripe real, tarjeta real, factura fiscal ni cobro externo.</p>
+        <p class="muted">${testMode
+          ? "Importes calculados por el servidor al aprobar la solicitud. La matricula familiar se cobra una sola vez. Sin cobro real: administracion registra el resultado."
+          : "Recorrido local de prueba. No hay Stripe real, tarjeta real, factura fiscal ni cobro externo."}</p>
       </div>
       <div class="hero-side">
         <div class="hero-pill">${payments.filter((payment) => payment.status === "paid").length} pagados</div>
@@ -47,7 +51,9 @@ export function renderAdminPayments({ state, services, centers, trainingKidsPlan
     <section class="section-title">
       <div>
         <h2>Pagos</h2>
-        <p class="muted">Importes y vencimientos simulados por inscripcion. Football Academy y Gym Home no tienen cobros activos.</p>
+        <p class="muted">${state.appMode === "test"
+          ? "Pagos de prueba por inscripcion, sin cobro real. Registra aqui el resultado. Football Academy y Gym Home no tienen cobros activos."
+          : "Importes y vencimientos simulados por inscripcion. Football Academy y Gym Home no tienen cobros activos."}</p>
       </div>
     </section>
     <div class="doc-filter-row">
@@ -55,12 +61,12 @@ export function renderAdminPayments({ state, services, centers, trainingKidsPlan
       ${Object.entries(paymentStatusMeta).map(([key, meta]) => paymentFilterButton(key, meta.label, state.paymentStatusFilter)).join("")}
     </div>
     <div class="grid two">
-      ${payments.length ? payments.map((payment) => renderPaymentCard({ payment, state, services, centers, trainingKidsPlans })).join("") : `<div class="empty">No hay pagos para este filtro.</div>`}
+      ${payments.length ? payments.map((payment) => renderPaymentCard({ payment, state, services, centers, trainingKidsPlans, allPayments: state.payments })).join("") : `<div class="empty">No hay pagos para este filtro.</div>`}
     </div>
   `;
 }
 
-function renderPaymentCard({ payment, state, services, centers, trainingKidsPlans, familyView = false }) {
+function renderPaymentCard({ payment, state, services, centers, trainingKidsPlans, familyView = false, allPayments = [] }) {
   const enrollment = state.enrollments.find((item) => item.id === payment.enrollmentId);
   const children = state.adminChildren || state.family.children;
   const child = children.find((item) => item.id === payment.childId);
@@ -89,14 +95,14 @@ function renderPaymentCard({ payment, state, services, centers, trainingKidsPlan
         <div class="total"><span>Total</span><strong>${total} €</strong></div>
       </div>
       ${payment.receipt ? renderReceipt(payment) : ""}
-      ${renderPaymentActions(payment, familyView)}
+      ${renderPaymentActions({ payment, familyView, state, allPayments })}
     </article>
   `;
 }
 
-function renderPaymentActions(payment, familyView) {
+function renderPaymentActions({ payment, familyView, state, allPayments }) {
   if (payment.service !== "training_kids") return "";
-  if (payment.remote) return `<p class="muted">Registro remoto en modo lectura.</p>`;
+  if (payment.remote) return renderRemotePaymentActions({ payment, familyView, state, allPayments });
   if (payment.status === "paid") return `<p class="muted">Pago ya confirmado. No se puede duplicar.</p>`;
   if (payment.status === "canceled") return `<p class="muted">Pago cancelado en esta simulacion.</p>`;
 
@@ -111,10 +117,62 @@ function renderPaymentActions(payment, familyView) {
   `;
 }
 
+const REMOTE_RESULT_TEXT = {
+  paid: "Confirmar que el pago de prueba se ha cobrado. Genera un recibo de prueba y no se podra deshacer.",
+  failed: "Confirmar que el pago de prueba ha fallado. Podras marcarlo despues como pagado o cancelarlo.",
+  canceled: "Confirmar la cancelacion del pago de prueba. Para cobrar despues habra que preparar uno nuevo.",
+};
+
+function renderRemotePaymentActions({ payment, familyView, state, allPayments }) {
+  if (familyView || !state.session?.isAdmin) {
+    return `<p class="muted">${payment.status === "paid" ? "Pago confirmado." : "Administracion registra el resultado de este pago de prueba. No hay cobro real."}</p>`;
+  }
+  if (!state.remotePaymentsReady) {
+    return `<p class="muted">Acciones de pago disponibles cuando se aplique la migracion de la Fase G.</p>`;
+  }
+  const pending = state.pendingAdminAction?.paymentId === payment.id ? state.pendingAdminAction : null;
+  const saving = state.saveState === "saving";
+  if (pending) return renderPaymentConfirmation(pending, saving);
+  const id = jsArg(payment.id);
+  const disabled = saving ? "disabled" : "";
+  if (payment.status === "pending" || payment.status === "failed") {
+    return `
+      <div class="actions payment-actions">
+        <button type="button" class="button" data-payment-action="paid" onclick="requestPaymentResult(${id}, 'paid')" ${disabled}>Marcar pagado</button>
+        ${payment.status === "pending" ? `<button type="button" class="button ghost" data-payment-action="failed" onclick="requestPaymentResult(${id}, 'failed')" ${disabled}>Marcar fallido</button>` : ""}
+        <button type="button" class="button ghost" data-payment-action="canceled" onclick="requestPaymentResult(${id}, 'canceled')" ${disabled}>Cancelar pago</button>
+      </div>
+    `;
+  }
+  if (canPrepareNewPayment(payment, allPayments)) {
+    return `
+      <div class="actions payment-actions">
+        <button type="button" class="button ghost" data-payment-action="prepare" onclick="requestPaymentPreparation(${id}, ${jsArg(payment.enrollmentId)})" ${disabled}>Preparar nuevo pago</button>
+      </div>
+    `;
+  }
+  return `<p class="muted">${payment.status === "paid" ? "Pago confirmado. No se puede modificar." : "Pago cerrado."}</p>`;
+}
+
+function renderPaymentConfirmation(action, saving) {
+  const text = action.type === "prepare_payment"
+    ? "Confirmar que se prepara un pago nuevo con la tarifa vigente. La matricula solo se incluye si la familia no la tiene ya."
+    : REMOTE_RESULT_TEXT[action.result] || "Confirmar el cambio del pago de prueba.";
+  return `
+    <div class="admin-confirmation" role="alertdialog" aria-live="assertive">
+      <strong>${escapeHtml(text)}</strong>
+      <div class="actions">
+        <button type="button" class="button" data-confirm-action="${escapeHtml(action.type)}" onclick="confirmAdminAction()" ${saving ? "disabled" : ""}>Confirmar</button>
+        <button type="button" class="button ghost" onclick="cancelAdminAction()" ${saving ? "disabled" : ""}>Cancelar</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderReceipt(payment) {
   return `
     <div class="receipt-box payment-receipt">
-      <span class="badge green">RECIBO SIMULADO</span>
+      <span class="badge green">${payment.receipt.remote ? "RECIBO DE PRUEBA" : "RECIBO SIMULADO"}</span>
       <h3>No es factura fiscal</h3>
       <ul class="small-list">
         <li><span>Recibo</span><strong>${escapeHtml(payment.receipt.id)}</strong></li>

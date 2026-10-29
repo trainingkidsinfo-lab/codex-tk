@@ -10,22 +10,22 @@ import {
   stepLabels,
   steps,
   trainingKidsPlans,
-} from "./data/mock-data.js?v=f1";
-import { loadAppConfig } from "./data/app-config.js?v=f1";
-import { createLocalDataAdapter } from "./data/local-adapter.js?v=f1";
-import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=f1";
-import { translateDataError } from "./data/errors.js?v=f1";
-import { renderAuth, renderLoading } from "./areas/access.js?v=f1";
-import { renderAdmin } from "./areas/admin.js?v=f1";
-import { renderDesign } from "./areas/design.js?v=f1";
-import { renderDocuments } from "./areas/documents.js?v=f1";
-import { renderFamily } from "./areas/family.js?v=f1";
-import { getEnrollmentReview } from "./areas/enrollment-review.js?v=f1";
-import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=f1";
-import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=f1";
-import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=f1";
-import { renderPayments } from "./areas/payments.js?v=f1";
-import { appChrome, serviceName, toast } from "./ui/shared.js?v=f1";
+} from "./data/mock-data.js?v=g1";
+import { loadAppConfig } from "./data/app-config.js?v=g1";
+import { createLocalDataAdapter } from "./data/local-adapter.js?v=g1";
+import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=g1";
+import { translateDataError } from "./data/errors.js?v=g1";
+import { renderAuth, renderLoading } from "./areas/access.js?v=g1";
+import { renderAdmin } from "./areas/admin.js?v=g1";
+import { renderDesign } from "./areas/design.js?v=g1";
+import { renderDocuments } from "./areas/documents.js?v=g1";
+import { renderFamily } from "./areas/family.js?v=g1";
+import { getEnrollmentReview } from "./areas/enrollment-review.js?v=g1";
+import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=g1";
+import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=g1";
+import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=g1";
+import { renderPayments } from "./areas/payments.js?v=g1";
+import { appChrome, serviceName, toast } from "./ui/shared.js?v=g1";
 
 const appConfig = loadAppConfig();
 const adapter = appConfig.isSupabaseTest
@@ -477,6 +477,46 @@ function confirmAdminAction() {
   }
   if (action.type === "withdraw") {
     applyEnrollmentWithdrawal(action.enrollmentId);
+    return;
+  }
+  if (action.type === "payment") {
+    applyPaymentResult(action.paymentId, action.result);
+    return;
+  }
+  if (action.type === "prepare_payment") {
+    applyPaymentPreparation(action.paymentEnrollmentId);
+  }
+}
+
+function requestPaymentResult(paymentId, result) {
+  if (!adapter.isRemote) return simulateTrainingKidsPayment(paymentId, result);
+  if (!["paid", "failed", "canceled"].includes(result)) return;
+  if (!getState().payments.some((payment) => payment.id === paymentId)) return toast("Pago no encontrado.");
+  adapter.setState({ pendingAdminAction: { type: "payment", paymentId, result } });
+}
+
+function requestPaymentPreparation(paymentId, enrollmentId) {
+  if (!adapter.isRemote) return;
+  adapter.setState({ pendingAdminAction: { type: "prepare_payment", paymentId, paymentEnrollmentId: enrollmentId } });
+}
+
+async function applyPaymentResult(paymentId, result) {
+  adapter.setState({ pendingAdminAction: null });
+  try {
+    await adapter.recordPayment(paymentId, result);
+    toast(result === "paid" ? "Pago registrado y recibo de prueba generado." : "Pago actualizado.");
+  } catch (error) {
+    toast(translateDataError(error, "No se pudo registrar el pago."));
+  }
+}
+
+async function applyPaymentPreparation(enrollmentId) {
+  adapter.setState({ pendingAdminAction: null });
+  try {
+    await adapter.preparePayment(enrollmentId);
+    toast("Pago nuevo preparado.");
+  } catch (error) {
+    toast(translateDataError(error, "No se pudo preparar el pago."));
   }
 }
 
@@ -1220,6 +1260,8 @@ window.confirmAdminAction = confirmAdminAction;
 window.cancelAdminAction = cancelAdminAction;
 window.simulatePayment = simulatePayment;
 window.simulateTrainingKidsPayment = simulateTrainingKidsPayment;
+window.requestPaymentResult = requestPaymentResult;
+window.requestPaymentPreparation = requestPaymentPreparation;
 window.markFootballInterest = markFootballInterest;
 window.openDocument = openDocument;
 window.setDocumentStep = setDocumentStep;

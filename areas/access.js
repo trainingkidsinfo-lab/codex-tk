@@ -1,4 +1,4 @@
-import { escapeHtml } from "../ui/escape.js?v=f1";
+import { escapeHtml } from "../ui/escape.js?v=g1";
 
 export function renderAuth({ state, testCode, appConfig }) {
   const isSupabaseTest = appConfig?.isSupabaseTest;
