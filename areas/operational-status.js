@@ -1,4 +1,4 @@
-import { centerName, planName, serviceName } from "../ui/shared.js?v=h1";
+import { centerName, planName, serviceName } from "../ui/shared.js?v=i1";
 
 export const operationalStatusMeta = {
   draft: { label: "Borrador", tone: "" },

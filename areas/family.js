@@ -1,9 +1,9 @@
-import { childServices, formatDate, planName, serviceName } from "../ui/shared.js?v=h1";
-import { escapeHtml, jsArg } from "../ui/escape.js?v=h1";
-import { footballAcademyButtonLabel } from "./football-academy.js?v=h1";
-import { gymHomeFutureButtonLabel } from "./gym-home.js?v=h1";
-import { getEnrollmentOperationalSummary } from "./operational-status.js?v=h1";
-import { renderTrainingKidsEnrollment } from "./training-kids.js?v=h1";
+import { childServices, formatDate, planName, serviceName } from "../ui/shared.js?v=i1";
+import { escapeHtml, jsArg } from "../ui/escape.js?v=i1";
+import { footballAcademyButtonLabel } from "./football-academy.js?v=i1";
+import { gymHomeFutureButtonLabel } from "./gym-home.js?v=i1";
+import { getEnrollmentOperationalSummary } from "./operational-status.js?v=i1";
+import { renderTrainingKidsEnrollment } from "./training-kids.js?v=i1";
 
 export function renderFamily({ state, steps, stepLabels, services, centers, groups, trainingKidsPlans }) {
   const child = getSelectedChild(state);
@@ -194,6 +194,7 @@ function renderStatus({ state, child, services, centers, groups, trainingKidsPla
     </div>
     <div class="grid two">
       ${childEnrollments.map((enrollment) => {
+        if (enrollment.interest) return renderInterestCard({ enrollment, services });
         const summary = getEnrollmentOperationalSummary({ enrollment, state, services, centers, groups, trainingKidsPlans });
         return `
         <article class="service-card ${enrollment.service === "football_academy" ? "featured" : ""}">
@@ -220,6 +221,23 @@ function renderStatus({ state, child, services, centers, groups, trainingKidsPla
       <button class="button" onclick="setState({activeView:'documents'})">Ver documentos</button>
       <button class="button" onclick="setState({activeView:'payments'})">Ver pagos</button>
     </div>
+  `;
+}
+
+function renderInterestCard({ enrollment, services }) {
+  return `
+    <article class="service-card featured">
+      <div class="badge-row">
+        <span class="badge yellow">${escapeHtml(serviceName(services, enrollment.service))}</span>
+        <span class="badge">${escapeHtml(enrollment.status)}</span>
+      </div>
+      <h3>${escapeHtml(enrollment.status)}</h3>
+      <p class="muted">${enrollment.interestStatus === "contacted"
+        ? "Ya hemos contactado con vosotros. Os avisaremos cuando abra la contratacion."
+        : enrollment.interestStatus === "closed"
+          ? "Esta prealta esta cerrada."
+          : "Hemos recibido vuestro interes. Administracion contactara cuando abra la contratacion. No hay pagos ni documentos que firmar."}</p>
+    </article>
   `;
 }
 

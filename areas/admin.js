@@ -1,9 +1,9 @@
-import { centerName, planName, serviceName } from "../ui/shared.js?v=h1";
-import { escapeHtml, jsArg } from "../ui/escape.js?v=h1";
-import { renderAdminDocuments } from "./documents.js?v=h1";
-import { getEnrollmentReview } from "./enrollment-review.js?v=h1";
-import { getEnrollmentOperationalSummary, getGroupOccupancy } from "./operational-status.js?v=h1";
-import { renderAdminPayments } from "./payments.js?v=h1";
+import { centerName, planName, serviceName } from "../ui/shared.js?v=i1";
+import { escapeHtml, jsArg } from "../ui/escape.js?v=i1";
+import { renderAdminDocuments } from "./documents.js?v=i1";
+import { getEnrollmentReview } from "./enrollment-review.js?v=i1";
+import { getEnrollmentOperationalSummary, getGroupOccupancy } from "./operational-status.js?v=i1";
+import { renderAdminPayments } from "./payments.js?v=i1";
 
 export function renderAdmin({ state, services, centers, groups, trainingKidsPlans, documentTemplates, legalDocumentSources }) {
   const filter = state.adminServiceFilter;
@@ -96,6 +96,7 @@ export function renderAdmin({ state, services, centers, groups, trainingKidsPlan
 
 function renderEnrollmentAdmin({ summary, enrollment, state, services, centers, groups, trainingKidsPlans }) {
   if (!enrollment) return "";
+  if (enrollment.interest) return renderInterestAdminCard({ enrollment, state, services });
   const child = summary.child || (state.adminChildren || state.family.children).find((item) => item.id === enrollment.childId) || state.family.children[0] || {};
   const validGroups = groups.filter((group) => (
     group.service === enrollment.service
@@ -115,7 +116,7 @@ function renderEnrollmentAdmin({ summary, enrollment, state, services, centers, 
       </div>
       <h3>${escapeHtml(child.name || "Hijo sin nombre")}</h3>
       ${child.familyName ? `<p class="muted">${escapeHtml(child.familyName)}</p>` : ""}
-      ${enrollment.remote ? `<div class="badge-row"><span class="badge">Revisión: ${escapeHtml(reviewLabel(enrollment.reviewStatus))}</span></div>` : ""}
+      ${enrollment.remote && !enrollment.interest ? `<div class="badge-row"><span class="badge">Revisión: ${escapeHtml(reviewLabel(enrollment.reviewStatus))}</span></div>` : ""}
       <ul class="small-list">
         <li><span>Centro</span><strong>${escapeHtml(summary.centerLabel)}</strong></li>
         <li><span>Plan</span><strong>${escapeHtml(enrollment.planId ? planName(trainingKidsPlans, enrollment.planId) : "Prealta")}</strong></li>
@@ -153,10 +154,42 @@ function renderEnrollmentAdmin({ summary, enrollment, state, services, centers, 
           ` : ""}
         </div>
         ${pendingAction ? renderAdminConfirmation(pendingAction, saving, state.appMode) : ""}
-      ` : `
+      ` : enrollment.interest ? renderInterestActions({ enrollment, enrollmentId, saving }) : `
         <button type="button" class="button yellow" onclick="markFootballInterest(${enrollmentId})">Marcar contacto</button>
       `}
     </article>
+  `;
+}
+
+function renderInterestAdminCard({ enrollment, state, services }) {
+  const child = (state.adminChildren || state.family.children).find((item) => item.id === enrollment.childId) || {};
+  return `
+    <article class="task-card">
+      <div class="badge-row">
+        <span class="badge yellow">${escapeHtml(serviceName(services, enrollment.service))}</span>
+        <span class="badge">Prealta</span>
+      </div>
+      <h3>${escapeHtml(child.name || "Hijo sin nombre")}</h3>
+      ${child.familyName ? `<p class="muted">${escapeHtml(child.familyName)}</p>` : ""}
+      <ul class="small-list">
+        <li><span>Recibida</span><strong>${escapeHtml(enrollment.createdAt ? new Date(enrollment.createdAt).toLocaleDateString("es-ES") : "")}</strong></li>
+        ${enrollment.notes ? `<li><span>Comentario</span><strong>${escapeHtml(enrollment.notes)}</strong></li>` : ""}
+      </ul>
+      ${renderInterestActions({ enrollment, enrollmentId: jsArg(enrollment.id), saving: state.saveState === "saving" })}
+    </article>
+  `;
+}
+
+function renderInterestActions({ enrollment, enrollmentId, saving }) {
+  const disabled = saving ? "disabled" : "";
+  return `
+    <div class="badge-row"><span class="badge yellow">${escapeHtml(enrollment.status)}</span></div>
+    ${enrollment.interestStatus === "closed" ? `<p class="muted">Prealta cerrada.</p>` : `
+      <div class="actions">
+        ${enrollment.interestStatus === "received" ? `<button type="button" class="button yellow" data-interest-action="contacted" onclick="updateFootballInterest(${enrollmentId}, 'contacted')" ${disabled}>Marcar contactada</button>` : ""}
+        <button type="button" class="button ghost" data-interest-action="closed" onclick="updateFootballInterest(${enrollmentId}, 'closed')" ${disabled}>Cerrar prealta</button>
+      </div>
+    `}
   `;
 }
 
