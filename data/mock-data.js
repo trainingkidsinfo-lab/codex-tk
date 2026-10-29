@@ -1,4 +1,4 @@
-import { legalDocumentSources } from "./legal-documents.js?v=i2";
+import { legalDocumentSources } from "./legal-documents.js?v=j1";
 
 export { legalDocumentSources };
 

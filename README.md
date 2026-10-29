@@ -20,6 +20,8 @@ Fase H lleva al servidor la activacion: solo se activa una inscripcion con solic
 
 Fase I guarda en el servidor la prealta de Football Academy, separada de las inscripciones y sin cobros. Administracion la marca como contactada o cerrada. Consulta `docs/FASE_I_PREALTA_FA.md`.
 
+Fase J permite dar de alta familias y tutores desde el panel mediante la edge function `prepare-family-access`, que usa la clave de servicio solo dentro de Supabase. Consulta `docs/FASE_J_ALTA_FAMILIAS.md`.
+
 ## Pruebas
 
 Con Node 20 o superior:
@@ -181,7 +183,7 @@ Archivos principales:
 - `docs/FASE_C_SUPABASE_TEST.md`: pasos para crear el proyecto y conectar la app.
 - `docs/FASE_C1_OTP_CONFIGURACION.md`: mejora futura para activar OTP cuando exista SMTP corporativo.
 - `supabase/migrations/202609230001_phase_d_family_operations.sql`: RPC y permisos de escritura de Fase D, aplicada en pruebas.
-- `supabase/functions/prepare-family-access/index.ts`: backend seguro preparado y aun no desplegado para altas familiares.
+- `supabase/functions/prepare-family-access/index.ts`: alta de familias y tutores (Fase J), reforzada.
 - `docs/FASE_D_OPERATIVA.md`: roles, flujos, estado verificado y paso manual.
 - `supabase/migrations/202610280001_phase_f_remote_signature.sql`: firma remota de Fase F, pendiente de aplicar.
 - `supabase/tests/phase_f_rls.sql`: pruebas manuales de la firma remota.
@@ -192,6 +194,8 @@ Archivos principales:
 - `docs/FASE_H_ESTADOS.md`: reglas y verificacion de la Fase H.
 - `supabase/migrations/202610290003_phase_i_football_interest.sql`: prealtas de Football Academy en tabla propia.
 - `docs/FASE_I_PREALTA_FA.md`: reglas y verificacion de la Fase I.
+- `supabase/migrations/202610290004_phase_j_family_access.sql`: alta de familias en una sola transaccion, solo para la edge function.
+- `docs/FASE_J_ALTA_FAMILIAS.md`: alta de familias y tutores desde administracion.
 - `docs/FASE_F_FIRMA_REMOTA.md`: alcance, limites y pasos para aplicar la Fase F.
 - `docs/PROYECTO_PRUEBAS.md`: proyecto Supabase de pruebas actual, que se ha cargado y como se ha verificado.
 

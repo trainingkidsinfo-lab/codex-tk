@@ -1,9 +1,9 @@
-import { childServices, formatDate, planName, serviceName } from "../ui/shared.js?v=i2";
-import { escapeHtml, jsArg } from "../ui/escape.js?v=i2";
-import { footballAcademyButtonLabel } from "./football-academy.js?v=i2";
-import { gymHomeFutureButtonLabel } from "./gym-home.js?v=i2";
-import { getEnrollmentOperationalSummary } from "./operational-status.js?v=i2";
-import { renderTrainingKidsEnrollment } from "./training-kids.js?v=i2";
+import { childServices, formatDate, planName, serviceName } from "../ui/shared.js?v=j1";
+import { escapeHtml, jsArg } from "../ui/escape.js?v=j1";
+import { footballAcademyButtonLabel } from "./football-academy.js?v=j1";
+import { gymHomeFutureButtonLabel } from "./gym-home.js?v=j1";
+import { getEnrollmentOperationalSummary } from "./operational-status.js?v=j1";
+import { renderTrainingKidsEnrollment } from "./training-kids.js?v=j1";
 
 export function renderFamily({ state, steps, stepLabels, services, centers, groups, trainingKidsPlans }) {
   const child = getSelectedChild(state);
