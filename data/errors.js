@@ -1,3 +1,4 @@
+/** @type {Array<[RegExp, string | ((match: RegExpMatchArray | null) => string)]>} */
 const ERROR_MESSAGES = [
   [/family_access_denied|row-level security/i, "No tienes permiso para acceder a esta familia."],
   [/player_access_denied/i, "No tienes permiso para modificar este hijo."],

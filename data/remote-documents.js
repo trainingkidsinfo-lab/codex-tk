@@ -112,7 +112,7 @@ export function mapRemoteDocuments({ familyId, enrollments, serviceDocuments, si
     const version = [...versions].sort((a, b) => String(b.effective_date).localeCompare(String(a.effective_date)))[0];
     if (!version) continue;
     if (definition.scope === "informative") {
-      documents.push(mapRemoteDocument({ definition, version, templateId, familyId }));
+      documents.push(mapRemoteDocument({ definition, version, templateId, familyId, enrollment: undefined, signature: undefined }));
       continue;
     }
     for (const enrollment of enrollments.filter((item) => item.service_id === definition.service_id)) {

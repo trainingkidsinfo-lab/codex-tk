@@ -1,17 +1,16 @@
-import { assertSupabaseConfig } from "./app-config.js?v=j1";
-import { isUuid, translateDataError } from "./errors.js?v=j1";
+import { assertSupabaseConfig } from "./app-config.js";
+import { isUuid, translateDataError } from "./errors.js";
 import {
   LEGACY_SIGNATURE_COLUMNS,
   SIGNATURE_BUCKETS,
   SIGNATURE_COLUMNS,
   mapRemoteDocuments,
   signRemoteDocument,
-} from "./remote-documents.js?v=j1";
-import { INTEREST_COLUMNS, isMissingRelation, mapInterestToEnrollment } from "./remote-interest.js?v=j1";
-import { LEGACY_PAYMENT_COLUMNS, PAYMENT_COLUMNS, PAYMENT_RESULTS, mapRemotePayment } from "./remote-payments.js?v=j1";
+} from "./remote-documents.js";
+import { INTEREST_COLUMNS, isMissingRelation, mapInterestToEnrollment } from "./remote-interest.js";
+import { LEGACY_PAYMENT_COLUMNS, PAYMENT_COLUMNS, PAYMENT_RESULTS, mapRemotePayment } from "./remote-payments.js";
 
 // Version exacta fijada (Fase E). Actualizar solo de forma deliberada y probada.
-const SUPABASE_JS_URL = "https://esm.sh/@supabase/supabase-js@2.103.0";
 
 const clone = (value) => typeof structuredClone === "function"
   ? structuredClone(value)
@@ -39,6 +38,14 @@ export function cleanAuthReturnHref(href) {
   return `${url.pathname}${url.search}`;
 }
 
+/**
+ * @param {{
+ *   projectUrl: string,
+ *   getToken: () => string | null | undefined,
+ *   fetchImpl?: typeof fetch,
+ *   onDiagnostic?: (diagnostic: object) => void,
+ * }} options
+ */
 export function createAuthenticatedFetch({ projectUrl, getToken, fetchImpl = fetch, onDiagnostic = () => {} }) {
   return async (input, init = {}) => {
     const requestUrl = typeof input === "string" ? input : input.url;
@@ -49,7 +56,7 @@ export function createAuthenticatedFetch({ projectUrl, getToken, fetchImpl = fet
     const authorization = headers.get("Authorization") || "";
     const response = await fetchImpl(input, { ...init, headers });
     if (isProjectRest && !response.ok) {
-      let body = {};
+      let body;
       try { body = await response.clone().json(); } catch { body = { message: response.statusText }; }
       onDiagnostic({
         status: response.status,
@@ -93,7 +100,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
   }
 
   try {
-    const { createClient } = await import(SUPABASE_JS_URL);
+    const { createClient } = await import("@supabase/supabase-js");
     const authenticatedFetch = createAuthenticatedFetch({
       projectUrl: config.supabaseUrl,
       getToken: () => activeSessionToken,
@@ -168,8 +175,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     console.info("Supabase getSession after callback:", { ok: !error, hasSession: Boolean(data?.session), errorCode: error?.code || error?.status || null });
     if (error) throw authStageError(error, "get_session", false);
     if (authReturn.error) {
-      const returnError = new Error(authReturn.error.replace(/\+/g, " "));
-      returnError.code = authReturn.errorCode;
+      const returnError = Object.assign(new Error(authReturn.error.replace(/\+/g, " ")), { code: authReturn.errorCode });
       throw authStageError(returnError, "callback_error", false);
     }
     let session = data.session;
@@ -181,8 +187,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
       session = retry.data.session;
     }
     if (authReturn.present && !session) {
-      const callbackError = new Error("auth_callback_without_session");
-      callbackError.code = "auth_callback_without_session";
+      const callbackError = Object.assign(new Error("auth_callback_without_session"), { code: "auth_callback_without_session" });
       throw authStageError(callbackError, "callback_session", false);
     }
     if (!session) {

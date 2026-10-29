@@ -19,6 +19,7 @@ export async function generateContractActivityPdf({ document, state, centers, gr
   const data = contractData({ document, state, centers, groups, trainingKidsPlans });
   const jpgs = await Promise.all(CONTRACT_PAGES.map((page) => fetchBinary(`${PAGE_ASSET}${page}.jpg`)));
   const signatureJpg = signed && signatureDrawing ? await pngDataUrlToJpegBinary(signatureDrawing) : null;
+  /** @type {Array<{ image?: string, customPage?: boolean, overlays: object[] }>} */
   const pages = CONTRACT_PAGES.map((pageNumber, index) => ({
     image: jpgs[index],
     overlays: overlaysForPage(pageNumber, data, { signatureJpg, signed }),

@@ -43,7 +43,10 @@ test("la revision administrativa no usa el dialogo nativo confirm", () => {
   assert.throws(() => getEnrollmentReview("toString"), /no válida/);
 });
 
-test("supabase-js se carga con version exacta", () => {
+test("supabase-js se instala con version exacta y no se carga desde un CDN", () => {
   const adapter = readFileSync(new URL("../data/supabase-adapter.js", import.meta.url), "utf8");
-  assert.match(adapter, /@supabase\/supabase-js@\d+\.\d+\.\d+"/);
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.match(pkg.dependencies["@supabase/supabase-js"], /^\d+\.\d+\.\d+$/);
+  assert.match(adapter, /await import\("@supabase\/supabase-js"\)/);
+  assert.doesNotMatch(adapter, /https:\/\/(esm\.sh|cdn\.|unpkg)/);
 });

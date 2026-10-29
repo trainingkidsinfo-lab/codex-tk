@@ -1,4 +1,4 @@
-import { centerName, planName, serviceName } from "../ui/shared.js?v=j1";
+import { centerName, planName, serviceName } from "../ui/shared.js";
 
 export const operationalStatusMeta = {
   draft: { label: "Borrador", tone: "" },
@@ -19,7 +19,7 @@ export function getEnrollmentOperationalSummary({ enrollment, state, services, c
   const group = groups.find((item) => item.id === enrollment.groupId);
   const personal = getPersonalRequirement({ family, child });
   const documents = getDocumentRequirement({ enrollment, state });
-  const groupRequirement = getGroupRequirement({ enrollment, group, state, groups, centers });
+  const groupRequirement = getGroupRequirement({ enrollment, state, groups, centers });
   const paymentRequirement = getPaymentRequirement({ enrollment, payment });
   const reviewRequirement = getReviewRequirement(enrollment);
   const validationNotes = getValidationNotes({ enrollment, state });
@@ -42,7 +42,7 @@ export function getEnrollmentOperationalSummary({ enrollment, state, services, c
     missing,
     validationNotes,
     needsReview,
-    nextStep: nextStepText({ status, missing, validationNotes, enrollment, group, centers, groups, payment }),
+    nextStep: nextStepText({ status, missing, validationNotes, enrollment, group, centers }),
     child,
     payment,
     group,
@@ -125,7 +125,7 @@ function getDocumentRequirement({ enrollment, state }) {
   return { complete: missing.length === 0, missing };
 }
 
-function getGroupRequirement({ enrollment, group, state, groups, centers }) {
+function getGroupRequirement({ enrollment, state, groups, centers }) {
   if (enrollment.service !== "training_kids") return { complete: true, missing: [] };
   if (!enrollment.groupId) return { complete: false, missing: ["Grupo: pendiente de asignacion administrativa"] };
   const validation = validateGroupAssignment({ enrollment, groupId: enrollment.groupId, state, centers, groups });

@@ -1,6 +1,6 @@
-import { centerName, planName, serviceName } from "../ui/shared.js?v=j1";
-import { escapeHtml, jsArg } from "../ui/escape.js?v=j1";
-import { canPrepareNewPayment } from "../data/remote-payments.js?v=j1";
+import { centerName, planName, serviceName } from "../ui/shared.js";
+import { escapeHtml, jsArg } from "../ui/escape.js";
+import { canPrepareNewPayment } from "../data/remote-payments.js";
 
 export const paymentStatusMeta = {
   pending: { label: "Pendiente", tone: "yellow" },

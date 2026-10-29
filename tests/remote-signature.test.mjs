@@ -127,7 +127,7 @@ test("si falla la subida no se registra la firma", async () => {
     signerName: "Tutor Prueba",
     completedData: { imageAuthorization: { value: "authorize" } },
     signaturePngDataUrl: PNG_ABC,
-  }), /row-level security/);
+  }), { message: /row-level security/ });
   assert.equal(supabase.calls.rpc.length, 0);
 });
 

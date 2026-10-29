@@ -1,6 +1,6 @@
-import { serviceName } from "../ui/shared.js?v=j1";
-import { escapeHtml, jsArg } from "../ui/escape.js?v=j1";
-import { parqQuestions } from "./pdf-generator.js?v=j1";
+import { serviceName } from "../ui/shared.js";
+import { escapeHtml, jsArg } from "../ui/escape.js";
+import { parqQuestions } from "./pdf-generator.js";
 
 // Documentos vigentes en el flujo activo. Cualquier otra plantilla queda fuera.
 const ACTION_DOCUMENT_IDS = new Set(["tk-service-terms", "tk-image-rights"]);
@@ -51,7 +51,7 @@ export function renderDocuments(context) {
   `;
 }
 
-export function renderAdminDocuments({ state, services, documentTemplates, legalDocumentSources }) {
+export function renderAdminDocuments({ state, services, documentTemplates }) {
   const filteredByService = state.adminServiceFilter === "all"
     ? state.documents
     : state.documents.filter((document) => document.service === state.adminServiceFilter || (state.adminServiceFilter === "training_kids" && document.service === "platform"));
@@ -74,7 +74,7 @@ export function renderAdminDocuments({ state, services, documentTemplates, legal
       ${Object.entries(documentStatusMeta).map(([key, meta]) => statusFilterButton(key, meta.label, state.documentStatusFilter)).join("")}
     </div>
     <div class="grid two">
-      ${documents.length ? documents.map((document) => renderDocumentCard({ document, state, services, documentTemplates, legalDocumentSources, compact: true })).join("") : `<div class="empty">No hay documentos para este filtro.</div>`}
+      ${documents.length ? documents.map((document) => renderDocumentCard({ document, state, services, documentTemplates, compact: true })).join("") : `<div class="empty">No hay documentos para este filtro.</div>`}
     </div>
   `;
 }
@@ -152,7 +152,7 @@ function renderDocumentDetail({ document, state, services, documentTemplates, le
             </div>
           ` : ""}
         </div>
-        ${flowStep === "signed" ? renderReceipt(document) : renderDocumentActionPanel({ document, state, canSign, flowStep, missingFields })}
+        ${flowStep === "signed" ? renderReceipt(document) : renderDocumentActionPanel({ canSign, flowStep, missingFields })}
       </div>
       ${flowStep === "signed" ? renderImmutableSnapshot(snapshot) : ""}
       ${flowStep === "fill" ? renderFillableForm({ document, fields, missingFields }) : ""}
@@ -393,7 +393,7 @@ function renderContractPagePreview(data = {}) {
   `;
 }
 
-function renderDocumentActionPanel({ document, state, canSign, flowStep, missingFields }) {
+function renderDocumentActionPanel({ canSign, flowStep, missingFields }) {
   if (!canSign) {
     return `<div class="signature-panel"><h3>Documento no aplicable</h3><p class="muted">Este documento queda visible, pero no requiere firma en esta fase.</p></div>`;
   }

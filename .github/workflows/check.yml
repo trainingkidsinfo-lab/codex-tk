@@ -1,0 +1,33 @@
+name: Comprobaciones
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Revisor de codigo
+        run: npm run lint
+      - name: Tipos
+        run: npm run typecheck
+      - name: Pruebas
+        run: npm test
+      - name: Compilacion
+        run: npm run build
+      - name: Ninguna clave de servicio en la compilacion
+        run: |
+          if grep -rEq "sb_secret_[A-Za-z0-9_-]{8,}" dist; then
+            echo "La compilacion contiene una clave de servicio." && exit 1
+          fi
