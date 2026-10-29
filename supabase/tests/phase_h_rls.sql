@@ -1,10 +1,12 @@
 -- Pruebas de Fase H (estados operativos). Ejecutar tras aplicar 202610290002_phase_h_operational_status.sql.
--- Parte del estado real de Leo en el proyecto de pruebas: aprobado, contrato firmado, pago pagado, sin grupo.
+-- Parte del estado real de Leo en el proyecto de pruebas: aprobado, contrato firmado y pago pagado.
+-- Al empezar se le quita el grupo (solo dentro de la transaccion) para probar el caso sin grupo.
 -- Todo termina en rollback: no deja datos. Devuelve una tabla con cada comprobacion.
 
 begin;
 create temp table resultado_h (orden int, prueba text, resultado text);
 grant all on resultado_h to authenticated;
+update public.enrollments set group_id = null where id = '77777777-7777-7777-7777-777777777771';
 
 set local role authenticated;
 

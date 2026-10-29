@@ -28,6 +28,7 @@ En este orden, todo el 2026-10-28:
 5. `202610280001_phase_f_remote_signature.sql`, sin cambios.
 6. `202610280002_harden_function_grants.sql`, ver mas abajo.
 7. `202610290001_phase_g_payments.sql` (2026-10-29) y su correccion `phase_g_payments_fix_status_compare`. Ver `docs/FASE_G_PAGOS.md`.
+8. `202610290002_phase_h_operational_status.sql` (2026-10-29). Ver `docs/FASE_H_ESTADOS.md`.
 
 Usuarios de Auth, creados a mano en el panel y confirmados:
 

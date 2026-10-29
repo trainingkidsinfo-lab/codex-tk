@@ -33,4 +33,13 @@
 
 - Pruebas automaticas en navegador (sin Node): 61 de 61 correctas.
 - Modo demo revisado.
-- Migracion y pruebas SQL: pendientes de aplicar en el proyecto de pruebas, con aprobacion expresa.
+- Migracion aplicada el 2026-10-29 en el proyecto de pruebas, con aprobacion expresa, sin errores.
+- `supabase/tests/phase_h_rls.sql`: 18 comprobaciones correctas y deshechas al final:
+  - La familia no puede activar ni asignar grupo, ni consultar inscripciones ajenas; si puede ver sus requisitos y la ocupacion.
+  - Sin grupo no se activa y el servidor explica por que.
+  - Grupo de otro centro y grupo lleno, rechazados.
+  - Asignar grupo suma una plaza; con todo completo se activa; activar dos veces no cambia nada.
+  - La baja libera la plaza, conserva el pago pagado e impide reactivar.
+  - Auditoria de grupo, activacion y baja.
+- Nota: al aprobar a Leo desde la app se eligio el grupo Ajalvir Lunes, asi que ya cumple todos los requisitos. El script quita el grupo dentro de la transaccion para probar el caso sin grupo.
+- Pendiente: activar a Leo desde la app.
