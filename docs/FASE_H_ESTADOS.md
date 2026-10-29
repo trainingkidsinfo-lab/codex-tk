@@ -42,4 +42,4 @@
   - La baja libera la plaza, conserva el pago pagado e impide reactivar.
   - Auditoria de grupo, activacion y baja.
 - Nota: al aprobar a Leo desde la app se eligio el grupo Ajalvir Lunes, asi que ya cumple todos los requisitos. El script quita el grupo dentro de la transaccion para probar el caso sin grupo.
-- Pendiente: activar a Leo desde la app.
+- Probada desde la app el 2026-10-29: administracion cambio a Leo al grupo Ajalvir Miercoles con **Guardar grupo** y lo activo. Estado `active`, una plaza ocupada en el grupo, pago pagado y auditoria de grupo y activacion.
