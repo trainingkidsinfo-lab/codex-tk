@@ -1,14 +1,14 @@
-import { assertSupabaseConfig } from "./app-config.js?v=i2";
-import { isUuid, translateDataError } from "./errors.js?v=i2";
+import { assertSupabaseConfig } from "./app-config.js?v=j1";
+import { isUuid, translateDataError } from "./errors.js?v=j1";
 import {
   LEGACY_SIGNATURE_COLUMNS,
   SIGNATURE_BUCKETS,
   SIGNATURE_COLUMNS,
   mapRemoteDocuments,
   signRemoteDocument,
-} from "./remote-documents.js?v=i2";
-import { INTEREST_COLUMNS, isMissingRelation, mapInterestToEnrollment } from "./remote-interest.js?v=i2";
-import { LEGACY_PAYMENT_COLUMNS, PAYMENT_COLUMNS, PAYMENT_RESULTS, mapRemotePayment } from "./remote-payments.js?v=i2";
+} from "./remote-documents.js?v=j1";
+import { INTEREST_COLUMNS, isMissingRelation, mapInterestToEnrollment } from "./remote-interest.js?v=j1";
+import { LEGACY_PAYMENT_COLUMNS, PAYMENT_COLUMNS, PAYMENT_RESULTS, mapRemotePayment } from "./remote-payments.js?v=j1";
 
 // Version exacta fijada (Fase E). Actualizar solo de forma deliberada y probada.
 const SUPABASE_JS_URL = "https://esm.sh/@supabase/supabase-js@2.103.0";
@@ -747,6 +747,22 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         commit();
       });
     },
+    async prepareFamilyAccess({ email, familyName = "", familyId = "" }) {
+      return runOperation(`family-access-${String(email).toLowerCase()}`, async () => {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        if (!token) throw new Error("authentication_required");
+        const { data, error } = await supabase.functions.invoke("prepare-family-access", {
+          body: { email, familyName: familyName || null, familyId: familyId || null },
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (error) throw new Error(await functionErrorCode(error));
+        if (!data?.ok) throw new Error(data?.error || "family_access_failed");
+        await refreshSessionAndState();
+        commit();
+        return data;
+      });
+    },
     async getSignedFileUrl(kind, path) {
       const bucket = kind === "pdf" ? SIGNATURE_BUCKETS.pdf : SIGNATURE_BUCKETS.evidence;
       const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 120);
@@ -796,6 +812,18 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
       authSubscription?.unsubscribe();
     },
   };
+
+  // Traduce los errores de la edge function a un codigo: el cuerpo trae { error: "codigo" }.
+  async function functionErrorCode(error) {
+    if (error?.name === "FunctionsFetchError" || error?.context?.status === 404) return "family_access_unavailable";
+    try {
+      const body = await error.context.json();
+      if (body?.error) return body.error;
+    } catch {
+      // Sin cuerpo JSON.
+    }
+    return error?.message || "family_access_failed";
+  }
 
   async function runEnrollmentOperation(key, rpcName, params) {
     return runOperation(key, async () => {

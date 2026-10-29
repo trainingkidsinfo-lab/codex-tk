@@ -39,6 +39,13 @@ const ERROR_MESSAGES = [
   [/interest_closed/i, "Esta prealta ya está cerrada."],
   [/interest_not_found/i, "No se encontró la prealta."],
   [/notes_too_long/i, "El texto es demasiado largo."],
+  [/family_access_unavailable/i, "El alta de familias estará disponible cuando se active la función en el proyecto de pruebas."],
+  [/email_belongs_to_admin/i, "Ese correo pertenece a una cuenta de administración."],
+  [/email_belongs_to_other_family/i, "Ese correo ya es tutor de otra familia."],
+  [/email_invalid/i, "Revisa el correo electrónico."],
+  [/family_name_too_long/i, "El nombre de la familia es demasiado largo."],
+  [/family_not_found/i, "No se encontró la familia elegida."],
+  [/authentication_required/i, "Tu sesión ha caducado. Vuelve a entrar."],
   [/duplicate key|unique constraint/i, "Ya existe un registro equivalente."],
   [/failed to fetch|network/i, "No se pudo conectar. Comprueba tu conexión y vuelve a intentarlo."],
 ];

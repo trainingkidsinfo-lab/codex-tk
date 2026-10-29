@@ -1,9 +1,9 @@
-import { centerName, planName, serviceName } from "../ui/shared.js?v=i2";
-import { escapeHtml, jsArg } from "../ui/escape.js?v=i2";
-import { renderAdminDocuments } from "./documents.js?v=i2";
-import { getEnrollmentReview } from "./enrollment-review.js?v=i2";
-import { getEnrollmentOperationalSummary, getGroupOccupancy } from "./operational-status.js?v=i2";
-import { renderAdminPayments } from "./payments.js?v=i2";
+import { centerName, planName, serviceName } from "../ui/shared.js?v=j1";
+import { escapeHtml, jsArg } from "../ui/escape.js?v=j1";
+import { renderAdminDocuments } from "./documents.js?v=j1";
+import { getEnrollmentReview } from "./enrollment-review.js?v=j1";
+import { getEnrollmentOperationalSummary, getGroupOccupancy } from "./operational-status.js?v=j1";
+import { renderAdminPayments } from "./payments.js?v=j1";
 
 export function renderAdmin({ state, services, centers, groups, trainingKidsPlans, documentTemplates, legalDocumentSources }) {
   const filter = state.adminServiceFilter;
@@ -62,6 +62,7 @@ export function renderAdmin({ state, services, centers, groups, trainingKidsPlan
               <div class="badge-row"><span class="badge">${family.tutors.length} adultos</span><span class="badge turquoise">${family.children.length} hijos</span></div>
             </article>`).join("") || `<div class="empty">No hay familias para esta búsqueda.</div>`}
         </div>
+        ${state.appMode === "test" && state.session?.isAdmin ? renderFamilyAccessForm(state) : ""}
         <section class="section-title"><h2>Solicitudes e inscripciones</h2>${state.appMode === "demo" ? `<button class="button ghost" onclick="simulatePayment()">Pago prueba simulado</button>` : ""}</section>
         <div class="doc-filter-row">
           ${operationalFilterButton("all", "Todas", state.operationalStatusFilter)}
@@ -160,6 +161,37 @@ function renderEnrollmentAdmin({ summary, enrollment, state, services, centers, 
         <button type="button" class="button yellow" onclick="markFootballInterest(${enrollmentId})">Marcar contacto</button>
       `}
     </article>
+  `;
+}
+
+function renderFamilyAccessForm(state) {
+  const families = state.adminFamilies || [];
+  const saving = state.saveState === "saving";
+  return `
+    <section class="panel pad family-access-form" aria-labelledby="family-access-title">
+      <h3 id="family-access-title">Dar de alta una familia o un tutor</h3>
+      <p class="muted">Crea la familia y el acceso del tutor. El tutor entra pidiendo su enlace en la pantalla de acceso. Usa solo correos de prueba.</p>
+      <div class="form-grid">
+        <div class="field">
+          <label for="family-access-target">Familia</label>
+          <select id="family-access-target">
+            <option value="">Nueva familia</option>
+            ${families.map((family) => `<option value="${escapeHtml(family.id)}">${escapeHtml(family.name)}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <label for="family-access-name">Nombre de la familia nueva</label>
+          <input id="family-access-name" maxlength="120" placeholder="Familia Ejemplo" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="family-access-email">Correo del tutor</label>
+          <input id="family-access-email" type="email" maxlength="254" placeholder="tutor@ejemplo.com" autocomplete="off" />
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" class="button" data-operation="family-access" onclick="submitFamilyAccess()" ${saving ? "disabled" : ""}>Dar de alta</button>
+      </div>
+    </section>
   `;
 }
 

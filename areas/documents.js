@@ -1,6 +1,6 @@
-import { serviceName } from "../ui/shared.js?v=i2";
-import { escapeHtml, jsArg } from "../ui/escape.js?v=i2";
-import { parqQuestions } from "./pdf-generator.js?v=i2";
+import { serviceName } from "../ui/shared.js?v=j1";
+import { escapeHtml, jsArg } from "../ui/escape.js?v=j1";
+import { parqQuestions } from "./pdf-generator.js?v=j1";
 
 // Documentos vigentes en el flujo activo. Cualquier otra plantilla queda fuera.
 const ACTION_DOCUMENT_IDS = new Set(["tk-service-terms", "tk-image-rights"]);

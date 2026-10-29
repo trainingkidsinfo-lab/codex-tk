@@ -10,22 +10,22 @@ import {
   stepLabels,
   steps,
   trainingKidsPlans,
-} from "./data/mock-data.js?v=i2";
-import { loadAppConfig } from "./data/app-config.js?v=i2";
-import { createLocalDataAdapter } from "./data/local-adapter.js?v=i2";
-import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=i2";
-import { translateDataError } from "./data/errors.js?v=i2";
-import { renderAuth, renderLoading } from "./areas/access.js?v=i2";
-import { renderAdmin } from "./areas/admin.js?v=i2";
-import { renderDesign } from "./areas/design.js?v=i2";
-import { renderDocuments } from "./areas/documents.js?v=i2";
-import { renderFamily } from "./areas/family.js?v=i2";
-import { getEnrollmentReview } from "./areas/enrollment-review.js?v=i2";
-import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=i2";
-import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=i2";
-import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=i2";
-import { renderPayments } from "./areas/payments.js?v=i2";
-import { appChrome, serviceName, toast } from "./ui/shared.js?v=i2";
+} from "./data/mock-data.js?v=j1";
+import { loadAppConfig } from "./data/app-config.js?v=j1";
+import { createLocalDataAdapter } from "./data/local-adapter.js?v=j1";
+import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=j1";
+import { translateDataError } from "./data/errors.js?v=j1";
+import { renderAuth, renderLoading } from "./areas/access.js?v=j1";
+import { renderAdmin } from "./areas/admin.js?v=j1";
+import { renderDesign } from "./areas/design.js?v=j1";
+import { renderDocuments } from "./areas/documents.js?v=j1";
+import { renderFamily } from "./areas/family.js?v=j1";
+import { getEnrollmentReview } from "./areas/enrollment-review.js?v=j1";
+import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=j1";
+import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=j1";
+import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=j1";
+import { renderPayments } from "./areas/payments.js?v=j1";
+import { appChrome, serviceName, toast } from "./ui/shared.js?v=j1";
 
 const appConfig = loadAppConfig();
 const adapter = appConfig.isSupabaseTest
@@ -320,6 +320,26 @@ async function updateFootballInterest(requestId, status) {
     toast(status === "contacted" ? "Prealta marcada como contactada." : "Prealta cerrada.");
   } catch (error) {
     toast(translateDataError(error, "No se pudo actualizar la prealta."));
+  }
+}
+
+async function submitFamilyAccess() {
+  if (!adapter.isRemote || !getState().session?.isAdmin) return;
+  const familyId = document.querySelector("#family-access-target")?.value || "";
+  const familyName = document.querySelector("#family-access-name")?.value.trim() || "";
+  const email = document.querySelector("#family-access-email")?.value.trim().toLowerCase() || "";
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast("Revisa el correo del tutor.");
+  if (!familyId && !familyName) return toast("Indica el nombre de la familia nueva.");
+  try {
+    const result = await adapter.prepareFamilyAccess({ email, familyName, familyId });
+    if (!result) return;
+    toast(result.already_member
+      ? "Ese tutor ya tenía acceso a la familia."
+      : result.created_family
+        ? "Familia dada de alta. El tutor ya puede pedir su enlace de acceso."
+        : "Tutor añadido. Ya puede pedir su enlace de acceso.");
+  } catch (error) {
+    toast(translateDataError(error, "No se pudo dar de alta la familia."));
   }
 }
 
@@ -1332,6 +1352,7 @@ window.selectService = selectService;
 window.saveTrainingEnrollment = saveTrainingEnrollment;
 window.assignGroup = assignGroup;
 window.saveGroupAssignment = saveGroupAssignment;
+window.submitFamilyAccess = submitFamilyAccess;
 window.reviewEnrollment = reviewEnrollment;
 window.approveEnrollment = approveEnrollment;
 window.requestEnrollmentChanges = requestEnrollmentChanges;
