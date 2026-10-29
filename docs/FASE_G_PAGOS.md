@@ -48,4 +48,4 @@ D6, decidida el 2026-10-29: la matricula de 20 EUR se cobra **una sola vez por f
   - Tras cancelar el pago de Sofia, el nuevo sigue sin matricula.
   - 5 eventos de pago y 5 entradas de auditoria; la familia ve sus 3 pagos y 1 recibo.
 - El contador de recibos se reinicio tras las pruebas.
-- Pendiente: probar desde la app (aprobar con administracion y registrar el pago).
+- Probada desde la app el 2026-10-29: administracion aprobo la solicitud de Leo, se preparo el pago de 80 EUR (60 + 20 de matricula) y al marcarlo pagado se genero `TK-PRUEBA-000001`. Historial y auditoria correctos.
