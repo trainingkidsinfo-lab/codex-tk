@@ -39,4 +39,5 @@ D5: las prealtas se guardan en una tabla propia, `service_interest_requests`, se
   - Tras cerrar, la familia puede registrar interes de nuevo.
   - Auditoria de cada paso.
 - Permisos de la tabla para usuarios con sesion: solo lectura.
-- Pendiente: probar desde la app.
+- Probada desde la app el 2026-10-29: la familia solicito informacion de Football Academy para Sofia y administracion la marco como contactada. Estado `contacted` con fecha y auditoria de ambos pasos.
+- Modo demo: "Marcar contacto" ahora muestra aviso y estado; antes parecia no hacer nada.
