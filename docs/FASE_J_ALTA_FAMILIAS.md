@@ -37,4 +37,14 @@ D7, aprobada el 2026-10-29: activar la edge function `prepare-family-access` en 
 - Pruebas automaticas en navegador (sin Node): 76 de 76 correctas, incluida la comprobacion de que la clave de servicio no aparece en ningun archivo del navegador.
 - Modo demo revisado: sin formulario de alta.
 - La edge function no se puede ejecutar en este equipo (no hay Deno); se probara tras desplegarla.
-- Migracion, despliegue y pruebas: pendientes, con aviso previo.
+- Migracion aplicada el 2026-10-29 en el proyecto de pruebas, con aprobacion expresa, sin errores.
+- `supabase/tests/phase_j_rls.sql`: 14 comprobaciones correctas y deshechas al final:
+  - Una sesion de administracion normal no puede llamar a las funciones de servidor (42501).
+  - El servidor busca el usuario por correo sin distinguir mayusculas, crea la familia y repetir el alta no duplica nada.
+  - Rechaza actor que no es administracion, rol de familia para administracion, tutor de otra familia, correo que no coincide con el usuario y familia inexistente, sin dejar familias a medias.
+  - El tutor nuevo solo ve su familia y tiene rol `family`; el alta queda en la auditoria.
+- Edge function desplegada el 2026-10-29 (version 1, `verify_jwt` activado). Comprobado desde fuera:
+  - sin cabecera de autorizacion: 401 de Supabase;
+  - con la clave publica, sin usuario: 401 `authentication_required` (la funcion arranca y tiene su configuracion);
+  - preflight desde `http://127.0.0.1:4181`: permitido; desde otro origen: no autorizado.
+- Pendiente: probar desde la app un alta real de prueba y la entrada del tutor.

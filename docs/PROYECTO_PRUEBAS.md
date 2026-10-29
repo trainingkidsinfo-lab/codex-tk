@@ -30,6 +30,7 @@ En este orden, todo el 2026-10-28:
 7. `202610290001_phase_g_payments.sql` (2026-10-29) y su correccion `phase_g_payments_fix_status_compare`. Ver `docs/FASE_G_PAGOS.md`.
 8. `202610290002_phase_h_operational_status.sql` (2026-10-29). Ver `docs/FASE_H_ESTADOS.md`.
 9. `202610290003_phase_i_football_interest.sql` (2026-10-29). Ver `docs/FASE_I_PREALTA_FA.md`.
+10. `202610290004_phase_j_family_access.sql` (2026-10-29) y despliegue de la edge function `prepare-family-access`. Ver `docs/FASE_J_ALTA_FAMILIAS.md`.
 
 Usuarios de Auth, creados a mano en el panel y confirmados:
 
