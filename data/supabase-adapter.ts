@@ -1,24 +1,103 @@
-import { assertSupabaseConfig } from "./app-config.js";
-import { isUuid, translateDataError } from "./errors.js";
+import type { PostgrestError, Session } from "@supabase/supabase-js";
+import { assertSupabaseConfig, type AppConfig } from "./app-config.ts";
+import type { Database, Json, Tables } from "./database.types.ts";
+import { asErrorLike, isUuid, translateDataError } from "./errors.ts";
 import {
   LEGACY_SIGNATURE_COLUMNS,
   SIGNATURE_BUCKETS,
   SIGNATURE_COLUMNS,
   mapRemoteDocuments,
   signRemoteDocument,
-} from "./remote-documents.js";
-import { INTEREST_COLUMNS, isMissingRelation, mapInterestToEnrollment } from "./remote-interest.js";
-import { LEGACY_PAYMENT_COLUMNS, PAYMENT_COLUMNS, PAYMENT_RESULTS, mapRemotePayment } from "./remote-payments.js";
+  type SignableDocument,
+  type SignatureRow,
+} from "./remote-documents.ts";
+import { INTEREST_COLUMNS, isMissingRelation, mapInterestToEnrollment, type InterestRow } from "./remote-interest.ts";
+import { LEGACY_PAYMENT_COLUMNS, PAYMENT_COLUMNS, PAYMENT_RESULTS, mapRemotePayment, type PaymentRow } from "./remote-payments.ts";
+import { callRpc, type RpcArgs, type RpcName, type TkSupabaseClient } from "./supabase-client.ts";
 
-// Version exacta fijada (Fase E). Actualizar solo de forma deliberada y probada.
+// El estado completo de la app se tipara al ordenar app.js (etapa 3 de K1).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AppState = Record<string, any>;
 
-const clone = (value) => typeof structuredClone === "function"
+type ServiceCode = Database["public"]["Enums"]["service_code"];
+
+type FamilyRow = Pick<Tables<"families">, "id" | "name" | "phone" | "email" | "address" | "stripe_customer_ref">;
+type ProfileRef = Pick<Tables<"profiles">, "id" | "email" | "full_name" | "phone">;
+type MemberRow = Pick<Tables<"family_members">, "id" | "relationship" | "can_sign" | "can_pay" | "user_id"> & {
+  profiles: ProfileRef | ProfileRef[] | null;
+};
+type PlayerRow = Pick<Tables<"players">, "id" | "first_name" | "last_name" | "birth_date" | "team"> & {
+  medical_profiles: Pick<Tables<"medical_profiles">, "notes"> | Pick<Tables<"medical_profiles">, "notes">[] | null;
+  emergency_contacts: Pick<Tables<"emergency_contacts">, "name" | "phone" | "relationship" | "priority">[] | null;
+};
+type EnrollmentRow = Pick<
+  Tables<"enrollments">,
+  "id" | "family_id" | "player_id" | "service_id" | "location_id" | "season_id" | "group_id" | "plan_id" | "plan_price_id"
+  | "status" | "operational_status" | "review_status" | "review_notes" | "start_on"
+> & {
+  availability_requests: AvailabilityRef | AvailabilityRef[] | null;
+};
+type AvailabilityRef = Pick<Tables<"availability_requests">, "availability" | "notes">;
+type AuditRow = Pick<Tables<"audit_log">, "id" | "created_at" | "actor_label" | "action" | "service_id">;
+
+// Resultado de una lectura que puede caer al esquema anterior a una migracion.
+type LegacyAwareResult<Row> = { data: Row[] | null; error: PostgrestError | null; legacy?: boolean };
+
+interface AuthEventInfo { event: string; hasSession: boolean }
+type StagedError = { stage?: string; hasSession?: boolean };
+
+export interface PostgrestDiagnostic {
+  status: number;
+  code: string | null;
+  message: string;
+  details: string | null;
+  hint: string | null;
+  authorization: "session_jwt" | "publishable_key" | "other" | "missing";
+  projectHost: string;
+}
+
+interface SafeSession {
+  userId: string | null;
+  email: string | null;
+  subjectMatches: boolean;
+  role: string | null;
+  audience: string | null;
+  issuerHost: string | null;
+  expiresAt: number | null;
+  expired: boolean | null;
+  algorithm: string | null;
+  projectMatches: boolean;
+}
+
+export interface PlayerInput {
+  id?: string;
+  name?: string;
+  birthDate?: string;
+  team?: string;
+  medical?: string;
+  emergencyName?: string;
+  emergencyPhone?: string;
+  emergencyRelationship?: string;
+}
+
+export interface EnrollmentInput {
+  playerId: string;
+  serviceId: ServiceCode;
+  locationId: string;
+  seasonId: string;
+  planId: string;
+  planPriceId: string;
+  availability?: Json;
+  notes?: string;
+}
+
+const clone = <T>(value: T): T => typeof structuredClone === "function"
   ? structuredClone(value)
   : JSON.parse(JSON.stringify(value));
-const first = (value) => Array.isArray(value) ? value[0] : value;
-const money = (cents) => Number(cents || 0) / 100;
+const first = <T>(value: T | T[] | null | undefined): T | undefined => Array.isArray(value) ? value[0] : value ?? undefined;
+const money = (cents: number | null | undefined) => Number(cents || 0) / 100;
 
-export function parseAuthReturn(href) {
+export function parseAuthReturn(href: string) {
   const url = new URL(href);
   const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
   const errorDescription = url.searchParams.get("error_description") || hash.get("error_description");
@@ -31,32 +110,30 @@ export function parseAuthReturn(href) {
   };
 }
 
-export function cleanAuthReturnHref(href) {
+export function cleanAuthReturnHref(href: string): string {
   const url = new URL(href);
   ["code", "error", "error_code", "error_description", "token", "type"].forEach((key) => url.searchParams.delete(key));
   url.hash = "";
   return `${url.pathname}${url.search}`;
 }
 
-/**
- * @param {{
- *   projectUrl: string,
- *   getToken: () => string | null | undefined,
- *   fetchImpl?: typeof fetch,
- *   onDiagnostic?: (diagnostic: object) => void,
- * }} options
- */
-export function createAuthenticatedFetch({ projectUrl, getToken, fetchImpl = fetch, onDiagnostic = () => {} }) {
-  return async (input, init = {}) => {
-    const requestUrl = typeof input === "string" ? input : input.url;
+export function createAuthenticatedFetch({ projectUrl, getToken, fetchImpl = fetch, onDiagnostic = () => {} }: {
+  projectUrl: string;
+  getToken: () => string | null | undefined;
+  fetchImpl?: typeof fetch;
+  onDiagnostic?: (diagnostic: PostgrestDiagnostic) => void;
+}): typeof fetch {
+  return async (input: RequestInfo | URL, init: RequestInit = {}) => {
+    const request: Request | null = input instanceof Request ? input : null;
+    const requestUrl = typeof input === "string" ? input : request ? request.url : String(input);
     const isProjectRest = requestUrl.startsWith(`${projectUrl}/rest/v1/`);
-    const headers = new Headers(init.headers || (typeof input === "string" ? undefined : input.headers));
+    const headers = new Headers(init.headers || request?.headers);
     const token = getToken();
     if (isProjectRest && token) headers.set("Authorization", `Bearer ${token}`);
     const authorization = headers.get("Authorization") || "";
     const response = await fetchImpl(input, { ...init, headers });
     if (isProjectRest && !response.ok) {
-      let body;
+      let body: Partial<Record<"code" | "message" | "details" | "hint", string>> | null;
       try { body = await response.clone().json(); } catch { body = { message: response.statusText }; }
       onDiagnostic({
         status: response.status,
@@ -72,23 +149,29 @@ export function createAuthenticatedFetch({ projectUrl, getToken, fetchImpl = fet
   };
 }
 
-export async function createSupabaseDataAdapter({ initialState, config, onChange }) {
+export async function createSupabaseDataAdapter({ initialState, config, onChange }: {
+  initialState: AppState;
+  config: AppConfig;
+  onChange?: (state: AppState) => void;
+}) {
   assertSupabaseConfig(config);
   let state = testState({ connectionStatus: "loading" });
-  let supabase;
-  let authSubscription;
+  // Solo queda sin cliente si falla la inicializacion; requestLoginLink y logout lo comprueban.
+  let supabase = undefined as unknown as TkSupabaseClient;
+  let authSubscription: { unsubscribe(): void } | undefined;
   let otpRequestInFlight = false;
   let initializationComplete = false;
-  let initialAuthEvent = { event: "PENDING", hasSession: false };
+  let initialAuthEvent: AuthEventInfo = { event: "PENDING", hasSession: false };
   let activeSessionToken = "";
-  let lastSafeSession = null;
-  let lastPostgrestDiagnostic = null;
-  let resolveInitialAuthEvent;
-  const initialAuthEventPromise = new Promise((resolve) => { resolveInitialAuthEvent = resolve; });
-  const operationsInFlight = new Set();
+  let lastSafeSession: SafeSession | null = null;
+  let lastPostgrestDiagnostic: PostgrestDiagnostic | null = null;
+  let resolveInitialAuthEvent: (value: AuthEventInfo) => void = () => {};
+  const initialAuthEventPromise = new Promise<AuthEventInfo>((resolve) => { resolveInitialAuthEvent = resolve; });
+  const operationsInFlight = new Set<string>();
+  const rpc = <N extends RpcName>(name: N, args: RpcArgs<N>) => callRpc(supabase, name, args);
   const authReturn = parseAuthReturn(window.location.href);
 
-  function testState(patch = {}) {
+  function testState(patch: AppState = {}): AppState {
     return {
       ...clone(initialState),
       appMode: "test",
@@ -109,7 +192,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         console.error("Supabase PostgREST safe response:", JSON.stringify(diagnostic));
       },
     });
-    supabase = createClient(config.supabaseUrl, config.supabaseAnonKey, {
+    supabase = createClient<Database>(config.supabaseUrl, config.supabaseAnonKey, {
       auth: {
         flowType: "implicit",
         persistSession: true,
@@ -147,14 +230,15 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
   } catch (error) {
     initializationComplete = true;
     console.error("Supabase authentication initialization failed:", safeError(error));
+    const failure = asErrorLike(error) as ReturnType<typeof asErrorLike> & StagedError;
     state = testState({
       connectionStatus: "error",
       connectionError: friendlyError(error),
       authDiagnostics: {
-        stage: error?.stage || "initialization",
+        stage: failure.stage || "initialization",
         event: initialAuthEvent.event,
-        hasSession: Boolean(error?.hasSession || initialAuthEvent.hasSession),
-        code: error?.code || "unknown",
+        hasSession: Boolean(failure.hasSession || initialAuthEvent.hasSession),
+        code: failure.code || "unknown",
       },
     });
   }
@@ -219,38 +303,37 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     await loadPrivateStateWithRecovery(data.session);
   }
 
-  function authStageError(error, stage, hasSession) {
-    error.stage = stage;
-    error.hasSession = hasSession;
-    return error;
+  function authStageError<E extends object>(error: E, stage: string, hasSession: boolean): E & StagedError {
+    return Object.assign(error, { stage, hasSession });
   }
 
-  function safeError(error) {
+  function safeError(error: unknown) {
+    const e = asErrorLike(error);
     return {
-      name: error?.name || "Error",
-      code: error?.code || error?.status || "unknown",
-      message: error?.message || "unknown",
-      details: error?.details || null,
-      hint: error?.hint || null,
+      name: e.name || "Error",
+      code: e.code || e.status || "unknown",
+      message: e.message || "unknown",
+      details: e.details || null,
+      hint: e.hint || null,
     };
   }
 
-  function safeSession(session) {
-    let claims = {};
+  function safeSession(session: Session): SafeSession {
+    let claims: { sub?: string; role?: string; aud?: string; iss?: string; exp?: number } = {};
     try {
       const payload = session?.access_token?.split(".")?.[1];
       if (payload) claims = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
     } catch {
       claims = {};
     }
-    let header = {};
+    let header: { alg?: string } = {};
     try {
       const encodedHeader = session?.access_token?.split(".")?.[0];
       if (encodedHeader) header = JSON.parse(atob(encodedHeader.replace(/-/g, "+").replace(/_/g, "/")));
     } catch {
       header = {};
     }
-    const result = {
+    const result: SafeSession = {
       userId: session?.user?.id || null,
       email: session?.user?.email || null,
       subjectMatches: Boolean(session?.user?.id && claims.sub === session.user.id),
@@ -266,12 +349,12 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     return result;
   }
 
-  function diagnosticState(stage, event, hasSession, error) {
+  function diagnosticState(stage: string, event: string, hasSession: boolean, error: unknown) {
     return {
       stage,
       event,
       hasSession,
-      code: error?.code || "unknown",
+      code: asErrorLike(error).code || "unknown",
       projectMatches: lastSafeSession?.projectMatches ?? null,
       jwtRole: lastSafeSession?.role || null,
       jwtExpired: lastSafeSession?.expired ?? null,
@@ -280,7 +363,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     };
   }
 
-  async function loadPrivateStateWithRecovery(session) {
+  async function loadPrivateStateWithRecovery(session: Session): Promise<void> {
     activeSessionToken = session.access_token || "";
     const identity = await supabase.auth.getUser(session.access_token);
     if (identity.error) throw identity.error;
@@ -289,10 +372,11 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     try {
       await loadPrivateState(session);
     } catch (error) {
-      if (error?.code !== "PGRST303") throw error;
+      const rejected = asErrorLike(error);
+      if (rejected.code !== "PGRST303") throw error;
       console.warn("Supabase private data rejected session claims; refreshing once:", {
-        code: error.code,
-        message: error.message,
+        code: rejected.code,
+        message: rejected.message,
         session: safeSession(session),
       });
       const refreshed = await supabase.auth.refreshSession();
@@ -305,7 +389,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     }
   }
 
-  async function loadPrivateState(session) {
+  async function loadPrivateState(session: Session): Promise<void> {
     const userId = session.user.id;
     const [{ data: profile, error: profileError }, { data: roles, error: rolesError }] = await Promise.all([
       supabase.from("profiles").select("id,email,full_name,phone,active").eq("id", userId).maybeSingle(),
@@ -330,7 +414,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     });
   }
 
-  async function loadFamilyState(userId) {
+  async function loadFamilyState(userId: string) {
     const { data, error } = await supabase
       .from("family_members")
       .select("family_id")
@@ -369,7 +453,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     };
   }
 
-  async function loadFamilyById(familyId) {
+  async function loadFamilyById(familyId: string) {
     const results = await Promise.all([
       supabase.from("families").select("id,name,phone,email,address,stripe_customer_ref").eq("id", familyId).single(),
       supabase.from("family_members").select("id,relationship,can_sign,can_pay,user_id,profiles(id,email,full_name,phone)").eq("family_id", familyId).eq("status", "active"),
@@ -389,12 +473,14 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     const [familyResult, membersResult, playersResult, enrollmentsResult, auditResult, signaturesResult, paymentsResult, documentsResult, groupsResult, locationsResult, plansResult, seasonsResult] = results;
     const occupancy = await loadGroupOccupancy();
     const interest = await loadInterest(familyId);
-    const family = familyResult.data;
-    const players = playersResult.data || [];
-    const enrollments = enrollmentsResult.data || [];
+    const family: FamilyRow | null = familyResult.data;
+    if (!family) throw new Error("No se encontró la familia.");
+    const players: PlayerRow[] = playersResult.data || [];
+    const enrollments: EnrollmentRow[] = enrollmentsResult.data || [];
+    const members: MemberRow[] = membersResult.data || [];
 
     return {
-      family: mapFamily(family, membersResult.data || [], players),
+      family: mapFamily(family, members, players),
       selectedChildId: players[0]?.id || "",
       selectedCenter: locationsResult.data?.find((item) => item.service_id === "training_kids")?.id || "",
       selectedPlan: plansResult.data?.flatMap((plan) => (plan.plan_prices || []).map((price) => ({ plan, price })))
@@ -411,7 +497,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
       remotePaymentsReady: !paymentsResult.legacy,
       remoteOperationsReady: occupancy.ready,
       payments: (paymentsResult.data || []).map((item) => mapRemotePayment(item, enrollments)),
-      audit: (auditResult.data || []).map(mapAudit),
+      audit: ((auditResult.data || []) as AuditRow[]).map(mapAudit),
       remoteCatalog: {
         groups: (groupsResult.data || []).map((group) => ({
           id: group.id,
@@ -454,7 +540,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     };
   }
 
-  function mapFamily(family, members, players) {
+  function mapFamily(family: FamilyRow, members: MemberRow[], players: PlayerRow[]) {
     return {
       id: family.id,
       name: family.name,
@@ -490,7 +576,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     };
   }
 
-  function mapEnrollment(item) {
+  function mapEnrollment(item: EnrollmentRow) {
     const availability = first(item.availability_requests);
     return {
       id: item.id,
@@ -517,7 +603,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
 
   // Antes de aplicar la migracion F faltan columnas de evidencia: se lee el esquema anterior
   // y la firma remota queda desactivada en lugar de romper toda la carga.
-  async function loadSignatures(familyId) {
+  async function loadSignatures(familyId: string): Promise<LegacyAwareResult<SignatureRow>> {
     const result = await supabase.from("signature_records").select(SIGNATURE_COLUMNS).eq("family_id", familyId);
     if (result.error?.code !== "42703") return result;
     const legacy = await supabase.from("signature_records").select(LEGACY_SIGNATURE_COLUMNS).eq("family_id", familyId);
@@ -526,7 +612,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
 
   // Antes de aplicar la migracion I no existe la tabla de prealtas: no se muestran y
   // registrar interes queda desactivado.
-  async function loadInterest(familyId) {
+  async function loadInterest(familyId: string): Promise<{ ready: boolean; rows: InterestRow[] }> {
     const { data, error } = await supabase.from("service_interest_requests").select(INTEREST_COLUMNS)
       .eq("family_id", familyId).order("created_at", { ascending: false });
     if (error) {
@@ -538,7 +624,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
 
   // Antes de aplicar la migracion H no existe group_occupancy: se usa el recuento local
   // y las acciones de activacion, grupo y baja quedan desactivadas.
-  async function loadGroupOccupancy() {
+  async function loadGroupOccupancy(): Promise<{ ready: boolean; assigned: Map<string, number> }> {
     const { data, error } = await supabase.rpc("group_occupancy");
     if (error) return { ready: false, assigned: new Map() };
     return { ready: true, assigned: new Map((data || []).map((row) => [row.group_id, Number(row.assigned) || 0])) };
@@ -546,14 +632,16 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
 
   // Antes de aplicar la migracion G faltan columnas de pago: se lee el esquema anterior
   // y las acciones de pago quedan desactivadas en lugar de romper la carga.
-  async function loadPayments(familyId) {
-    const query = (columns) => supabase.from("payment_orders").select(columns).eq("family_id", familyId).order("created_at", { ascending: false });
+  async function loadPayments(familyId: string): Promise<LegacyAwareResult<PaymentRow>> {
+    const query = (columns: typeof PAYMENT_COLUMNS | typeof LEGACY_PAYMENT_COLUMNS) => supabase.from("payment_orders")
+      .select(columns).eq("family_id", familyId).order("created_at", { ascending: false })
+      .overrideTypes<PaymentRow[], { merge: false }>();
     const result = await query(PAYMENT_COLUMNS);
     if (result.error?.code !== "42703") return result;
     return { ...(await query(LEGACY_PAYMENT_COLUMNS)), legacy: true };
   }
 
-  function mapAudit(item) {
+  function mapAudit(item: AuditRow) {
     return {
       id: item.id,
       date: new Date(item.created_at).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" }),
@@ -564,8 +652,8 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     };
   }
 
-  function friendlyError(error) {
-    const message = error?.message || "No se pudo conectar con el servicio de acceso.";
+  function friendlyError(error: unknown): string {
+    const message = asErrorLike(error).message || "No se pudo conectar con el servicio de acceso.";
     if (/failed to fetch|network/i.test(message)) return "No se pudo conectar con el servicio de acceso. Comprueba tu conexión.";
     if (/expired|otp_expired/i.test(message)) return "El enlace de acceso ha caducado. Solicita uno nuevo.";
     if (/invalid|no ha creado una sesión válida/i.test(message)) return "El enlace de acceso no es válido o ya se ha utilizado. Solicita uno nuevo.";
@@ -575,10 +663,11 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     return "No se pudo preparar el acceso. Vuelve a intentarlo en unos minutos.";
   }
 
-  function friendlyDataLoadError(error) {
-    if (error?.code === "42703") return "el esquema remoto no contiene una columna esperada.";
-    if (error?.code === "PGRST202") return "Supabase todavía no reconoce una función de Fase D.";
-    if (error?.code === "42501") return "los permisos RLS han rechazado una consulta necesaria.";
+  function friendlyDataLoadError(error: unknown): string {
+    const { code } = asErrorLike(error);
+    if (code === "42703") return "el esquema remoto no contiene una columna esperada.";
+    if (code === "PGRST202") return "Supabase todavía no reconoce una función de Fase D.";
+    if (code === "42501") return "los permisos RLS han rechazado una consulta necesaria.";
     return translateDataError(error, "se produjo un error de lectura en Supabase.");
   }
 
@@ -589,23 +678,23 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
   return {
     client: supabase,
     getState: () => state,
-    setState(patch) {
+    setState(patch: AppState) {
       state = { ...state, ...patch };
       commit();
     },
-    updateFamily(patch) {
+    updateFamily(patch: AppState) {
       state.family = { ...state.family, ...patch };
       commit();
     },
-    mutate(mutator) {
+    mutate(mutator: (state: AppState) => void) {
       mutator(state);
       commit();
     },
     save() {},
     isRemote: true,
-    async saveFamily(patch) {
+    async saveFamily(patch: { name: string; phone?: string; address?: string }) {
       return runOperation("save-family", async () => {
-        const { error } = await supabase.rpc("family_update_details", {
+        const { error } = await rpc("family_update_details", {
           p_name: patch.name,
           p_phone: patch.phone || "",
           p_address: patch.address || "",
@@ -615,13 +704,13 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         commit();
       });
     },
-    async savePlayer(player) {
+    async savePlayer(player: PlayerInput) {
       return runOperation(`save-player-${player.id || "new"}`, async () => {
         const parts = String(player.name || "").trim().split(/\s+/);
         const firstName = parts.shift() || "";
         const lastName = parts.join(" ");
         const playerId = isUuid(player.id) ? player.id : null;
-        const { data, error } = await supabase.rpc("family_save_player", {
+        const { data, error } = await rpc("family_save_player", {
           p_player_id: playerId,
           p_first_name: firstName,
           p_last_name: lastName,
@@ -639,9 +728,9 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         return data;
       });
     },
-    async submitEnrollment(payload) {
+    async submitEnrollment(payload: EnrollmentInput) {
       return runOperation(`submit-enrollment-${payload.playerId}-${payload.serviceId}`, async () => {
-        const { data, error } = await supabase.rpc("family_submit_enrollment", {
+        const { data, error } = await rpc("family_submit_enrollment", {
           p_player_id: payload.playerId,
           p_service_id: payload.serviceId,
           p_location_id: payload.locationId,
@@ -658,9 +747,9 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         return data;
       });
     },
-    async reviewEnrollment(enrollmentId, decision, groupId = null, notes = "") {
+    async reviewEnrollment(enrollmentId: string, decision: string, groupId: string | null = null, notes = "") {
       return runOperation(`review-enrollment-${enrollmentId}`, async () => {
-        const { error } = await supabase.rpc("admin_review_enrollment", {
+        const { error } = await rpc("admin_review_enrollment", {
           p_enrollment_id: enrollmentId,
           p_decision: decision,
           p_group_id: groupId || null,
@@ -671,7 +760,13 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         commit();
       });
     },
-    async signDocument({ document, signerName, completedData, signaturePngDataUrl, pdfDataUrl }) {
+    async signDocument({ document, signerName, completedData, signaturePngDataUrl, pdfDataUrl }: {
+      document: SignableDocument & { id: string };
+      signerName: string;
+      completedData: Json;
+      signaturePngDataUrl: string;
+      pdfDataUrl?: string;
+    }) {
       return runOperation(`sign-document-${document.id}`, async () => {
         if (!state.remoteSignatureReady) throw new Error("signature_schema_missing");
         const result = await signRemoteDocument({
@@ -692,11 +787,11 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         return result;
       });
     },
-    async recordPayment(paymentId, result, note = "") {
-      if (!PAYMENT_RESULTS.includes(result)) throw new Error("payment_result_invalid");
+    async recordPayment(paymentId: string, result: string, note = "") {
+      if (!(PAYMENT_RESULTS as readonly string[]).includes(result)) throw new Error("payment_result_invalid");
       return runOperation(`record-payment-${paymentId}`, async () => {
         if (!state.remotePaymentsReady) throw new Error("payment_schema_missing");
-        const { error } = await supabase.rpc("admin_record_payment", {
+        const { error } = await rpc("admin_record_payment", {
           p_payment_order_id: paymentId,
           p_result: result,
           p_note: note || null,
@@ -706,28 +801,28 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         commit();
       });
     },
-    async preparePayment(enrollmentId) {
+    async preparePayment(enrollmentId: string) {
       return runOperation(`prepare-payment-${enrollmentId}`, async () => {
         if (!state.remotePaymentsReady) throw new Error("payment_schema_missing");
-        const { error } = await supabase.rpc("admin_prepare_payment_order", { p_enrollment_id: enrollmentId });
+        const { error } = await rpc("admin_prepare_payment_order", { p_enrollment_id: enrollmentId });
         if (error) throw error;
         await refreshSessionAndState();
         commit();
       });
     },
-    async assignGroup(enrollmentId, groupId) {
+    async assignGroup(enrollmentId: string, groupId: string) {
       return runEnrollmentOperation(`assign-group-${enrollmentId}`, "admin_assign_group", { p_enrollment_id: enrollmentId, p_group_id: groupId });
     },
-    async activateEnrollment(enrollmentId) {
+    async activateEnrollment(enrollmentId: string) {
       return runEnrollmentOperation(`activate-${enrollmentId}`, "admin_activate_enrollment", { p_enrollment_id: enrollmentId });
     },
-    async withdrawEnrollment(enrollmentId, reason = "") {
+    async withdrawEnrollment(enrollmentId: string, reason = "") {
       return runEnrollmentOperation(`withdraw-${enrollmentId}`, "admin_withdraw_enrollment", { p_enrollment_id: enrollmentId, p_reason: reason || null });
     },
-    async registerInterest(playerId, serviceId, notes = "") {
+    async registerInterest(playerId: string, serviceId: ServiceCode, notes = "") {
       return runOperation(`register-interest-${playerId}-${serviceId}`, async () => {
         if (!state.remoteInterestReady) throw new Error("interest_schema_missing");
-        const { error } = await supabase.rpc("family_register_interest", {
+        const { error } = await rpc("family_register_interest", {
           p_player_id: playerId,
           p_service_id: serviceId,
           p_notes: notes || null,
@@ -739,10 +834,10 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         commit();
       });
     },
-    async updateInterest(requestId, status, adminNotes = "") {
+    async updateInterest(requestId: string, status: string, adminNotes = "") {
       return runOperation(`update-interest-${requestId}`, async () => {
         if (!state.remoteInterestReady) throw new Error("interest_schema_missing");
-        const { error } = await supabase.rpc("admin_update_interest", {
+        const { error } = await rpc("admin_update_interest", {
           p_request_id: requestId,
           p_status: status,
           p_admin_notes: adminNotes || null,
@@ -752,12 +847,12 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         commit();
       });
     },
-    async prepareFamilyAccess({ email, familyName = "", familyId = "" }) {
+    async prepareFamilyAccess({ email, familyName = "", familyId = "" }: { email: string; familyName?: string; familyId?: string }) {
       return runOperation(`family-access-${String(email).toLowerCase()}`, async () => {
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData?.session?.access_token;
         if (!token) throw new Error("authentication_required");
-        const { data, error } = await supabase.functions.invoke("prepare-family-access", {
+        const { data, error } = await supabase.functions.invoke<{ ok: boolean; error?: string; createdUser?: boolean; family_id?: string }>("prepare-family-access", {
           body: { email, familyName: familyName || null, familyId: familyId || null },
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -768,13 +863,13 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         return data;
       });
     },
-    async getSignedFileUrl(kind, path) {
+    async getSignedFileUrl(kind: string, path: string) {
       const bucket = kind === "pdf" ? SIGNATURE_BUCKETS.pdf : SIGNATURE_BUCKETS.evidence;
       const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 120);
       if (error) throw error;
       return data.signedUrl;
     },
-    async requestLoginLink(email) {
+    async requestLoginLink(email: string) {
       if (!supabase) throw new Error(state.connectionError || "Supabase no esta disponible.");
       if (otpRequestInFlight) return;
       otpRequestInFlight = true;
@@ -819,28 +914,33 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
   };
 
   // Traduce los errores de la edge function a un codigo: el cuerpo trae { error: "codigo" }.
-  async function functionErrorCode(error) {
-    if (error?.name === "FunctionsFetchError" || error?.context?.status === 404) return "family_access_unavailable";
+  async function functionErrorCode(error: unknown): Promise<string> {
+    const failure = error as { name?: string; message?: string; context?: Response } | null;
+    if (failure?.name === "FunctionsFetchError" || failure?.context?.status === 404) return "family_access_unavailable";
     try {
-      const body = await error.context.json();
+      const body = await failure?.context?.json();
       if (body?.error) return body.error;
     } catch {
       // Sin cuerpo JSON.
     }
-    return error?.message || "family_access_failed";
+    return failure?.message || "family_access_failed";
   }
 
-  async function runEnrollmentOperation(key, rpcName, params) {
+  async function runEnrollmentOperation<N extends "admin_assign_group" | "admin_activate_enrollment" | "admin_withdraw_enrollment">(
+    key: string,
+    rpcName: N,
+    params: RpcArgs<N>,
+  ) {
     return runOperation(key, async () => {
       if (!state.remoteOperationsReady) throw new Error("operations_schema_missing");
-      const { error } = await supabase.rpc(rpcName, params);
+      const { error } = await rpc(rpcName, params);
       if (error) throw error;
       await refreshSessionAndState();
       commit();
     });
   }
 
-  async function runOperation(key, operation) {
+  async function runOperation<T>(key: string, operation: () => Promise<T>): Promise<T | undefined> {
     if (operationsInFlight.has(key)) return;
     operationsInFlight.add(key);
     state = { ...state, saveState: "saving", saveMessage: "Guardando…" };
@@ -851,7 +951,8 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
       commit();
       return result;
     } catch (error) {
-      console.error("Supabase data operation failed:", { operation: key, code: error?.code, message: error?.message });
+      const failure = asErrorLike(error);
+      console.error("Supabase data operation failed:", { operation: key, code: failure.code, message: failure.message });
       state = { ...state, saveState: "error", saveMessage: translateDataError(error) };
       commit();
       throw error;

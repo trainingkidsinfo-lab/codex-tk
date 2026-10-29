@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const migration = readFileSync(new URL("../supabase/migrations/202609230001_phase_d_family_operations.sql", import.meta.url), "utf8");
-const adapter = readFileSync(new URL("../data/supabase-adapter.js", import.meta.url), "utf8");
+const adapter = readFileSync(new URL("../data/supabase-adapter.ts", import.meta.url), "utf8");
 const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
 for (const rpc of ["family_update_details", "family_save_player", "family_submit_enrollment", "admin_review_enrollment"]) {

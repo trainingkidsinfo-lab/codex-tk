@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { renderAdmin } from "../areas/admin.js";
-import { translateDataError } from "../data/errors.js";
+import { translateDataError } from "../data/errors.ts";
 import { centers, documentTemplates, groups, initialState, legalDocumentSources, services, trainingKidsPlans } from "../data/mock-data.js";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
@@ -10,8 +10,8 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 test("la clave de servicio no aparece en ningun archivo que llega al navegador", () => {
   const files = [
     "index.html", "app.js", ".env.example", "vite.config.js",
-    "data/supabase-adapter.js", "data/app-config.js", "data/errors.js", "data/remote-documents.js",
-    "data/remote-payments.js", "data/remote-interest.js", "data/local-adapter.js", "data/mock-data.js",
+    "data/supabase-adapter.ts", "data/app-config.ts", "data/errors.ts", "data/remote-documents.ts",
+    "data/remote-payments.ts", "data/remote-interest.ts", "data/local-adapter.js", "data/mock-data.js",
     "areas/admin.js", "areas/family.js", "areas/documents.js", "areas/payments.js", "ui/shared.js",
   ];
   for (const file of files) {
@@ -73,7 +73,7 @@ test("los errores del alta se explican a administracion", () => {
 });
 
 test("el adaptador llama a la funcion con la sesion del administrador", () => {
-  const adapter = read("data/supabase-adapter.js");
-  assert.match(adapter, /supabase\.functions\.invoke\("prepare-family-access", \{/);
+  const adapter = read("data/supabase-adapter.ts");
+  assert.match(adapter, /supabase\.functions\.invoke(<[^>]*>)?\("prepare-family-access", \{/);
   assert.match(adapter, /headers: \{ Authorization: `Bearer \$\{token\}` \}/);
 });

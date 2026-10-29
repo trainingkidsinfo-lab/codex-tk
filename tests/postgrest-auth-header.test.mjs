@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createAuthenticatedFetch } from "../data/supabase-adapter.js";
+import { createAuthenticatedFetch } from "../data/supabase-adapter.ts";
 
 const projectUrl = "https://project-ref.supabase.co";
 const sessionToken = "eyJhbGciOiJFUzI1NiJ9.eyJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.signature";

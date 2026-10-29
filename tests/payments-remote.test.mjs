@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { canPrepareNewPayment, mapRemotePayment } from "../data/remote-payments.js";
+import { canPrepareNewPayment, mapRemotePayment } from "../data/remote-payments.ts";
 import { renderAdminPayments, renderPayments } from "../areas/payments.js";
 import { centers, initialState, services, trainingKidsPlans } from "../data/mock-data.js";
 
@@ -97,7 +97,7 @@ test("la app confirma en pagina y no escribe pagos directamente", () => {
   const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
   assert.match(app, /if \(action\.type === "payment"\) \{\s+applyPaymentResult/);
   assert.match(app, /pendingAdminAction: \{ type: "prepare_payment", paymentId, paymentEnrollmentId: enrollmentId \}/);
-  const adapter = readFileSync(new URL("../data/supabase-adapter.js", import.meta.url), "utf8");
+  const adapter = readFileSync(new URL("../data/supabase-adapter.ts", import.meta.url), "utf8");
   assert.doesNotMatch(adapter, /from\("payment_orders"\)\.(insert|update|upsert)/);
-  assert.match(adapter, /supabase\.rpc\("admin_record_payment"/);
+  assert.match(adapter, /rpc\("admin_record_payment"/);
 });
