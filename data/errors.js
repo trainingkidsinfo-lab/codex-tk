@@ -30,13 +30,20 @@ const ERROR_MESSAGES = [
   [/plan_price_missing/i, "La inscripción no tiene una tarifa válida para preparar el pago."],
   [/enrollment_not_approved/i, "La solicitud debe estar aprobada para preparar el pago."],
   [/enrollment_not_payable/i, "Esta inscripción está dada de baja y no admite pagos."],
+  [/operations_schema_missing/i, "Activar, asignar grupo y dar de baja estarán disponibles cuando se aplique la migración de la Fase H."],
+  [/enrollment_not_ready: (.+)/i, (match) => `No se puede activar todavía. ${match[1]}.`],
+  [/group_full/i, "El grupo ya está lleno."],
+  [/enrollment_withdrawn/i, "Esta inscripción está dada de baja."],
   [/duplicate key|unique constraint/i, "Ya existe un registro equivalente."],
   [/failed to fetch|network/i, "No se pudo conectar. Comprueba tu conexión y vuelve a intentarlo."],
 ];
 
 export function translateDataError(error, fallback = "No se pudo guardar el cambio. Vuelve a intentarlo.") {
   const technical = String(error?.message || error || "");
-  return ERROR_MESSAGES.find(([pattern]) => pattern.test(technical))?.[1] || fallback;
+  const entry = ERROR_MESSAGES.find(([pattern]) => pattern.test(technical));
+  if (!entry) return fallback;
+  const [pattern, message] = entry;
+  return typeof message === "function" ? message(technical.match(pattern)) : message;
 }
 
 export function isUuid(value) {

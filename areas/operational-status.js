@@ -1,4 +1,4 @@
-import { centerName, planName, serviceName } from "../ui/shared.js?v=g1";
+import { centerName, planName, serviceName } from "../ui/shared.js?v=h1";
 
 export const operationalStatusMeta = {
   draft: { label: "Borrador", tone: "" },
@@ -21,8 +21,9 @@ export function getEnrollmentOperationalSummary({ enrollment, state, services, c
   const documents = getDocumentRequirement({ enrollment, state });
   const groupRequirement = getGroupRequirement({ enrollment, group, state, groups, centers });
   const paymentRequirement = getPaymentRequirement({ enrollment, payment });
+  const reviewRequirement = getReviewRequirement(enrollment);
   const validationNotes = getValidationNotes({ enrollment, state });
-  const requirements = { personal, documents, group: groupRequirement, payment: paymentRequirement };
+  const requirements = { review: reviewRequirement, personal, documents, group: groupRequirement, payment: paymentRequirement };
   const missing = Object.values(requirements).filter((item) => !item.complete).flatMap((item) => item.missing);
   const isReady = enrollment.service === "training_kids" && missing.length === 0;
   const storedStatus = enrollment.operationalStatus || "draft";
@@ -51,10 +52,14 @@ export function getEnrollmentOperationalSummary({ enrollment, state, services, c
   };
 }
 
+// En modo test la ocupacion la calcula el servidor (serverAssigned), porque una familia
+// solo ve sus propias inscripciones. En demo se cuenta con el estado local.
 export function getGroupOccupancy({ group, state }) {
-  const assigned = state.enrollments.filter((enrollment) => (
-    enrollment.groupId === group.id && enrollment.operationalStatus !== "withdrawn"
-  )).length;
+  const assigned = Number.isInteger(group.serverAssigned)
+    ? group.serverAssigned
+    : state.enrollments.filter((enrollment) => (
+      enrollment.groupId === group.id && enrollment.operationalStatus !== "withdrawn"
+    )).length;
   const occupied = Math.min(group.capacity, group.occupied + assigned);
   return {
     occupied,
@@ -80,9 +85,11 @@ export function validateGroupAssignment({ enrollment, groupId, state, centers, g
     && item.operationalStatus !== "withdrawn"
   ));
   if (duplicate) return { ok: false, reason: "Este hijo ya tiene una inscripcion en ese grupo." };
-  const assignedByOthers = state.enrollments.filter((item) => (
-    item.id !== enrollment.id && item.groupId === groupId && item.operationalStatus !== "withdrawn"
-  )).length;
+  const assignedByOthers = Number.isInteger(group.serverAssigned)
+    ? group.serverAssigned - (enrollment.groupId === groupId && enrollment.operationalStatus !== "withdrawn" ? 1 : 0)
+    : state.enrollments.filter((item) => (
+      item.id !== enrollment.id && item.groupId === groupId && item.operationalStatus !== "withdrawn"
+    )).length;
   if (group.occupied + assignedByOthers >= group.capacity) return { ok: false, reason: "El grupo ya esta lleno." };
   return { ok: true };
 }
@@ -123,6 +130,13 @@ function getGroupRequirement({ enrollment, group, state, groups, centers }) {
   if (!enrollment.groupId) return { complete: false, missing: ["Grupo: pendiente de asignacion administrativa"] };
   const validation = validateGroupAssignment({ enrollment, groupId: enrollment.groupId, state, centers, groups });
   return validation.ok ? { complete: true, missing: [] } : { complete: false, missing: [`Grupo: ${validation.reason}`] };
+}
+
+function getReviewRequirement(enrollment) {
+  if (!enrollment.remote || enrollment.service !== "training_kids") return { complete: true, missing: [] };
+  return enrollment.reviewStatus === "approved"
+    ? { complete: true, missing: [] }
+    : { complete: false, missing: ["Revision: la solicitud no esta aprobada"] };
 }
 
 function getPaymentRequirement({ enrollment, payment }) {
