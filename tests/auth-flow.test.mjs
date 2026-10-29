@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { cleanAuthReturnHref, parseAuthReturn } from "../data/supabase-adapter.js";
+import { cleanAuthReturnHref, parseAuthReturn } from "../data/supabase-adapter.ts";
 
 const implicitReturn = "http://127.0.0.1:4181/?mode=test#access_token=test-token&expires_in=3600&refresh_token=test-refresh&type=magiclink";
 const parsedImplicit = parseAuthReturn(implicitReturn);

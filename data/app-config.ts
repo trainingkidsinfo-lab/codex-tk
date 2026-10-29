@@ -1,9 +1,18 @@
 // Vite sustituye estas variables al arrancar o compilar. Solo llegan al navegador las que empiezan por VITE_.
 // Fuera de Vite (pruebas con Node) no existen y se usa window.TK_CONFIG si alguien lo define.
-const viteEnv = /** @type {Partial<ImportMetaEnv>} */ (import.meta.env || {});
+const viteEnv: Partial<ImportMetaEnv> = import.meta.env || {};
 
-/** @param {Partial<ImportMetaEnv>} [env] */
-export function loadAppConfig(env = viteEnv) {
+export type AppMode = "demo" | "test" | (string & {});
+
+export interface AppConfig {
+  mode: AppMode;
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  isDemo: boolean;
+  isSupabaseTest: boolean;
+}
+
+export function loadAppConfig(env: Partial<ImportMetaEnv> = viteEnv): AppConfig {
   const runtime = globalThis.window?.TK_CONFIG || {};
   const params = new URLSearchParams(globalThis.location?.search || "");
   const mode = params.get("mode") || env.VITE_TK_MODE || runtime.mode || "demo";
@@ -16,7 +25,7 @@ export function loadAppConfig(env = viteEnv) {
   };
 }
 
-export function assertSupabaseConfig(config) {
+export function assertSupabaseConfig(config: Pick<AppConfig, "supabaseUrl" | "supabaseAnonKey">): void {
   if (!config.supabaseUrl || !config.supabaseAnonKey) {
     throw new Error("Falta configurar Supabase: supabaseUrl y supabaseAnonKey.");
   }

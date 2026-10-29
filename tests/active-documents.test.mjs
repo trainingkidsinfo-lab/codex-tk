@@ -44,7 +44,7 @@ test("la revision administrativa no usa el dialogo nativo confirm", () => {
 });
 
 test("supabase-js se instala con version exacta y no se carga desde un CDN", () => {
-  const adapter = readFileSync(new URL("../data/supabase-adapter.js", import.meta.url), "utf8");
+  const adapter = readFileSync(new URL("../data/supabase-adapter.ts", import.meta.url), "utf8");
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   assert.match(pkg.dependencies["@supabase/supabase-js"], /^\d+\.\d+\.\d+$/);
   assert.match(adapter, /await import\("@supabase\/supabase-js"\)/);
