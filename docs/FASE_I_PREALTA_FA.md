@@ -31,4 +31,12 @@ D5: las prealtas se guardan en una tabla propia, `service_interest_requests`, se
 
 - Pruebas automaticas en navegador (sin Node): 69 de 69 correctas.
 - Modo demo revisado: la prealta local sigue igual.
-- Migracion y pruebas SQL: pendientes de aplicar en el proyecto de pruebas, con aprobacion expresa.
+- Migracion aplicada el 2026-10-29 en el proyecto de pruebas, con aprobacion expresa, sin errores.
+- `supabase/tests/phase_i_rls.sql`: 12 comprobaciones correctas y deshechas al final:
+  - Registrar dos veces devuelve la misma prealta; Training Kids no admite prealta; no se puede para un hijo ajeno.
+  - La familia no puede insertar directamente ni cerrar su prealta.
+  - Administracion la ve, la marca como contactada y la cierra; una prealta cerrada no se puede cambiar.
+  - Tras cerrar, la familia puede registrar interes de nuevo.
+  - Auditoria de cada paso.
+- Permisos de la tabla para usuarios con sesion: solo lectura.
+- Pendiente: probar desde la app.
