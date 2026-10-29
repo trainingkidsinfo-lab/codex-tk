@@ -38,4 +38,14 @@ D6, decidida el 2026-10-29: la matricula de 20 EUR se cobra **una sola vez por f
 
 - Pruebas automaticas en navegador (sin Node): 52 de 52 correctas.
 - Modo demo revisado: la simulacion de pagos sigue igual.
-- Migracion y pruebas SQL: pendientes de aplicar en el proyecto de pruebas, con aprobacion expresa.
+- Migracion aplicada el 2026-10-29 en el proyecto de pruebas, con aprobacion expresa.
+- `supabase/tests/phase_g_rls.sql` detecto un error: `admin_record_payment` comparaba el estado (enum) con el resultado (texto). Se corrigio en el archivo de la migracion y se aplico la funcion corregida en el proyecto de pruebas como `phase_g_payments_fix_status_compare`.
+- Resultado de las pruebas SQL, todas correctas y deshechas al final:
+  - La familia no puede crear, registrar ni cambiar pagos.
+  - Leo: 60 EUR + 20 EUR de matricula = 80 EUR. Sofia: 100 EUR sin matricula.
+  - Aprobar dos veces no duplica el pago.
+  - Pagado genera `TK-PRUEBA-000001`; un pago pagado no se puede cancelar.
+  - Tras cancelar el pago de Sofia, el nuevo sigue sin matricula.
+  - 5 eventos de pago y 5 entradas de auditoria; la familia ve sus 3 pagos y 1 recibo.
+- El contador de recibos se reinicio tras las pruebas.
+- Pendiente: probar desde la app (aprobar con administracion y registrar el pago).

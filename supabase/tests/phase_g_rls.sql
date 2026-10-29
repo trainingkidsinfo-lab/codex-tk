@@ -45,7 +45,7 @@ select 4, 'pago Leo: tarifa + matricula = total',
 from public.payment_orders where enrollment_id = '77777777-7777-7777-7777-777777777771';
 insert into resultado_g
 select 5, 'pago Sofia: tarifa + matricula = total',
-  plan_amount_cents || ' + ' || enrollment_fee_cents || ' = ' || amount_cents || ' (' || status || ')'
+  po.plan_amount_cents || ' + ' || po.enrollment_fee_cents || ' = ' || po.amount_cents || ' (' || po.status || ')'
 from public.payment_orders po join public.enrollments e on e.id = po.enrollment_id
 where e.player_id = '88888888-8888-8888-8888-888888888882';
 

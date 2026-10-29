@@ -200,7 +200,7 @@ begin
   if v_order.id is null then raise exception 'payment_not_found'; end if;
   if v_order.status = 'paid' then raise exception 'payment_already_paid'; end if;
   if v_order.status = 'canceled' then raise exception 'payment_closed'; end if;
-  if v_order.status = p_result then raise exception 'payment_result_unchanged'; end if;
+  if v_order.status::text = p_result then raise exception 'payment_result_unchanged'; end if;
 
   update public.payment_orders
   set status = p_result::public.payment_status,

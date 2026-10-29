@@ -88,6 +88,7 @@ test("la migracion G aplica la matricula una sola vez y reserva los cambios a ad
   assert.match(sql, /if v_order\.status = 'paid' then raise exception 'payment_already_paid'/);
   assert.match(sql, /revoke insert, update, delete, truncate on public\.payment_orders, public\.payment_events from anon, authenticated;/);
   assert.match(sql, /revoke all on function public\.prepare_initial_payment_order\(uuid\) from public, anon, authenticated;/);
+  assert.match(sql, /if v_order\.status::text = p_result then/, "el estado (enum) se compara como texto");
   assert.doesNotMatch(sql, /to anon/);
   assert.doesNotMatch(sql, /service_role'|sb_secret/);
 });
