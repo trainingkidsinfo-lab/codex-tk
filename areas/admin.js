@@ -1,9 +1,9 @@
-import { centerName, planName, serviceName } from "../ui/shared.js?v=i1";
-import { escapeHtml, jsArg } from "../ui/escape.js?v=i1";
-import { renderAdminDocuments } from "./documents.js?v=i1";
-import { getEnrollmentReview } from "./enrollment-review.js?v=i1";
-import { getEnrollmentOperationalSummary, getGroupOccupancy } from "./operational-status.js?v=i1";
-import { renderAdminPayments } from "./payments.js?v=i1";
+import { centerName, planName, serviceName } from "../ui/shared.js?v=i2";
+import { escapeHtml, jsArg } from "../ui/escape.js?v=i2";
+import { renderAdminDocuments } from "./documents.js?v=i2";
+import { getEnrollmentReview } from "./enrollment-review.js?v=i2";
+import { getEnrollmentOperationalSummary, getGroupOccupancy } from "./operational-status.js?v=i2";
+import { renderAdminPayments } from "./payments.js?v=i2";
 
 export function renderAdmin({ state, services, centers, groups, trainingKidsPlans, documentTemplates, legalDocumentSources }) {
   const filter = state.adminServiceFilter;
@@ -154,7 +154,9 @@ function renderEnrollmentAdmin({ summary, enrollment, state, services, centers, 
           ` : ""}
         </div>
         ${pendingAction ? renderAdminConfirmation(pendingAction, saving, state.appMode) : ""}
-      ` : enrollment.interest ? renderInterestActions({ enrollment, enrollmentId, saving }) : `
+      ` : enrollment.interest ? renderInterestActions({ enrollment, enrollmentId, saving }) : enrollment.status === "Contactar para Football Academy" ? `
+        <p class="muted">Contacto marcado (simulacion).</p>
+      ` : `
         <button type="button" class="button yellow" onclick="markFootballInterest(${enrollmentId})">Marcar contacto</button>
       `}
     </article>

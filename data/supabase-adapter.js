@@ -1,14 +1,14 @@
-import { assertSupabaseConfig } from "./app-config.js?v=i1";
-import { isUuid, translateDataError } from "./errors.js?v=i1";
+import { assertSupabaseConfig } from "./app-config.js?v=i2";
+import { isUuid, translateDataError } from "./errors.js?v=i2";
 import {
   LEGACY_SIGNATURE_COLUMNS,
   SIGNATURE_BUCKETS,
   SIGNATURE_COLUMNS,
   mapRemoteDocuments,
   signRemoteDocument,
-} from "./remote-documents.js?v=i1";
-import { INTEREST_COLUMNS, isMissingRelation, mapInterestToEnrollment } from "./remote-interest.js?v=i1";
-import { LEGACY_PAYMENT_COLUMNS, PAYMENT_COLUMNS, PAYMENT_RESULTS, mapRemotePayment } from "./remote-payments.js?v=i1";
+} from "./remote-documents.js?v=i2";
+import { INTEREST_COLUMNS, isMissingRelation, mapInterestToEnrollment } from "./remote-interest.js?v=i2";
+import { LEGACY_PAYMENT_COLUMNS, PAYMENT_COLUMNS, PAYMENT_RESULTS, mapRemotePayment } from "./remote-payments.js?v=i2";
 
 // Version exacta fijada (Fase E). Actualizar solo de forma deliberada y probada.
 const SUPABASE_JS_URL = "https://esm.sh/@supabase/supabase-js@2.103.0";

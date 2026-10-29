@@ -10,22 +10,22 @@ import {
   stepLabels,
   steps,
   trainingKidsPlans,
-} from "./data/mock-data.js?v=i1";
-import { loadAppConfig } from "./data/app-config.js?v=i1";
-import { createLocalDataAdapter } from "./data/local-adapter.js?v=i1";
-import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=i1";
-import { translateDataError } from "./data/errors.js?v=i1";
-import { renderAuth, renderLoading } from "./areas/access.js?v=i1";
-import { renderAdmin } from "./areas/admin.js?v=i1";
-import { renderDesign } from "./areas/design.js?v=i1";
-import { renderDocuments } from "./areas/documents.js?v=i1";
-import { renderFamily } from "./areas/family.js?v=i1";
-import { getEnrollmentReview } from "./areas/enrollment-review.js?v=i1";
-import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=i1";
-import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=i1";
-import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=i1";
-import { renderPayments } from "./areas/payments.js?v=i1";
-import { appChrome, serviceName, toast } from "./ui/shared.js?v=i1";
+} from "./data/mock-data.js?v=i2";
+import { loadAppConfig } from "./data/app-config.js?v=i2";
+import { createLocalDataAdapter } from "./data/local-adapter.js?v=i2";
+import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=i2";
+import { translateDataError } from "./data/errors.js?v=i2";
+import { renderAuth, renderLoading } from "./areas/access.js?v=i2";
+import { renderAdmin } from "./areas/admin.js?v=i2";
+import { renderDesign } from "./areas/design.js?v=i2";
+import { renderDocuments } from "./areas/documents.js?v=i2";
+import { renderFamily } from "./areas/family.js?v=i2";
+import { getEnrollmentReview } from "./areas/enrollment-review.js?v=i2";
+import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=i2";
+import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=i2";
+import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=i2";
+import { renderPayments } from "./areas/payments.js?v=i2";
+import { appChrome, serviceName, toast } from "./ui/shared.js?v=i2";
 
 const appConfig = loadAppConfig();
 const adapter = appConfig.isSupabaseTest
@@ -812,6 +812,7 @@ function markFootballInterest(enrollmentId) {
       service: "Football Academy",
     });
   });
+  window.setTimeout(() => toast("Contacto de Football Academy marcado (simulacion)."), 100);
 }
 
 function openDocument(documentId) {
