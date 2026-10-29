@@ -6,7 +6,7 @@ Aplicada el 2026-10-28 en el proyecto de pruebas nuevo `yqvymjryecmfsoilkxgj`, c
 
 Si la app se conecta a un proyecto sin esta migracion, sigue cargando con normalidad y la firma remota aparece desactivada con un aviso.
 
-Pendiente: probar la firma desde la app en modo test.
+Probada desde la app en modo test el 2026-10-29: contrato y autorizacion de imagen firmados, con archivos y auditoria correctos.
 
 ## Que cambia
 
@@ -81,6 +81,6 @@ create policy signatures_family_insert on public.signature_records for insert wi
 
 - `tests/remote-signature.test.mjs`: rutas, aceptaciones, tipos de archivo, subida sin sobrescritura, huellas calculadas, fallo de subida sin registro de firma, identificadores estables, escapado del justificante y comprobaciones estaticas de la migracion.
 
-Verificacion realizada el 2026-10-28 sin Node instalado, en navegador con sustitutos de `node:test`, `node:assert` y `node:fs`: 38 de 38 correctas. El modo demo se ha recorrido firmando la autorizacion de imagen. En Supabase se han ejecutado las pruebas SQL; falta la prueba desde la app en modo test.
+Verificacion realizada el 2026-10-28 sin Node instalado, en navegador con sustitutos de `node:test`, `node:assert` y `node:fs`: 38 de 38 correctas. El modo demo se ha recorrido firmando la autorizacion de imagen. En Supabase se han ejecutado las pruebas SQL y la firma se ha probado desde la app en modo test.
 
 Pendiente: ejecutar `npm test` con Node 20 o superior.

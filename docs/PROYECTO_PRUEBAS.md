@@ -80,7 +80,20 @@ Avisos que se mantienen:
 
 Los avisos de rendimiento (indices en claves foraneas, politicas permisivas multiples) no son relevantes con el volumen de pruebas.
 
+## Prueba desde la app (2026-10-29)
+
+Con `config.local.js` apuntando al proyecto nuevo, el tutor de prueba entro por enlace al correo y firmo desde la app en modo test.
+
+| Documento | Resultado |
+|---|---|
+| Contrato de actividad | Firmado y bloqueado. PDF de 1,2 MB y PNG de la firma en sus buckets. Seis aceptaciones, incluidos Anexo 1 y PAR-Q. Huellas SHA-256 guardadas. |
+| Autorizacion de imagen | Firmada y bloqueada con decision "Autorizo". PNG de la firma en su bucket. |
+| Auditoria | Una entrada por firma, con documento y version. |
+| Inscripcion ficticia | Sin cambios (`pending`). |
+
+Leccion aprendida: el navegador conservaba `config.local.js` en cache y seguia usando el proyecto anterior. Se cambio el sufijo a `?v=f1`. Si se vuelve a cambiar de proyecto, conviene probar en una ventana de incognito.
+
 ## Pendiente
 
-- Cambiar `config.local.js` a la URL y la clave publica del proyecto nuevo.
-- Probar la app en modo test con los dos usuarios, incluida la firma desde el navegador.
+- Comprobar la vista de administracion con el usuario de Training Kids.
+- Verificar en servidor que la huella del PDF coincide con el archivo (requiere edge function).
