@@ -22,35 +22,39 @@ Fase I guarda en el servidor la prealta de Football Academy, separada de las ins
 
 Fase J permite dar de alta familias y tutores desde el panel mediante la edge function `prepare-family-access`, que usa la clave de servicio solo dentro de Supabase. Consulta `docs/FASE_J_ALTA_FAMILIAS.md`.
 
+Fase K1 (etapa 1) incorpora herramientas sin cambiar pantallas: Vite para abrir y compilar la app, comprobacion de tipos con TypeScript sobre el JavaScript actual, revisor de codigo ESLint y comprobaciones automaticas en GitHub. Consulta `docs/FASE_K1_HERRAMIENTAS.md`.
+
 ## Pruebas
 
-Con Node 20 o superior:
+Con Node 22.12 o superior, despues de `npm install`:
 
 ```bash
-npm test
+npm run check
 ```
 
-No requiere instalar dependencias.
+Ejecuta el revisor de codigo, los tipos, las pruebas y la compilacion. Por separado: `npm run lint`, `npm run typecheck`, `npm test` y `npm run build`. GitHub ejecuta lo mismo en cada PR.
 
 ## Como abrir
 
 Desde esta carpeta:
 
 ```bash
-python3 -m http.server 4174
+npm run dev
 ```
 
 Despues abrir el modo demo:
 
 ```text
-http://localhost:4174
+http://127.0.0.1:4181/?mode=demo
 ```
 
 Modo test:
 
 ```text
-http://localhost:4174/?mode=test
+http://127.0.0.1:4181/?mode=test
 ```
+
+`npm run build` deja la version compilada en `dist/` y `npm run preview` la sirve en la misma direccion.
 
 ## Acceso de prueba
 
@@ -62,7 +66,7 @@ Modo demo:
 
 Modo test Supabase:
 
-- La URL y publishable key de pruebas estan en `config.local.js`, que permanece ignorado por Git.
+- La URL y la publishable key de pruebas estan en `.env.local` (copia de `.env.example`), que permanece ignorado por Git.
 - Abrir `http://127.0.0.1:4181/?mode=test` y solicitar el enlace de acceso por email.
 - Abrir el enlace recibido en ese mismo navegador.
 - Para salir, pulsar el boton `X` de la cabecera.
@@ -97,8 +101,17 @@ tk-platform-v1/
   ui/
     shared.js
     escape.js
-  assets/
+    dom.js
+  types/
+    globals.d.ts
+  public/
+    assets/
+    original-documents/
   docs/
+  vite.config.js
+  tsconfig.json
+  eslint.config.js
+  .github/workflows/check.yml
 ```
 
 ## Separacion por areas
@@ -147,7 +160,7 @@ El flujo documental usa documentos de demostracion con titulos y estados, sin cl
 
 ## Control 3B documental definitivo
 
-Se han incorporado copias intactas de documentos aportados en `original-documents/training-kids/` y el texto extraido en `data/legal-documents.js`. La aplicacion muestra esos textos sin reescribir clausulas. Firma, almacenamiento, auditoria y justificante siguen siendo simulados/locales.
+Se han incorporado copias intactas de documentos aportados en `public/original-documents/training-kids/` y el texto extraido en `data/legal-documents.js`. La aplicacion muestra esos textos sin reescribir clausulas. Firma, almacenamiento, auditoria y justificante siguen siendo simulados/locales.
 
 ## Control 3C contratos rellenables
 
@@ -175,7 +188,7 @@ Archivos principales:
 
 - `data/supabase-adapter.js`: adaptador test compatible con la app actual. No usa `localStorage` como fallback silencioso.
 - `data/app-config.js`: seleccion explicita `demo` o `test`.
-- `config.example.js`: plantilla sin secretos.
+- `.env.example`: plantilla sin secretos.
 - `supabase/migrations/202609160001_phase_c_base.sql`: tablas, indices, RLS y buckets privados.
 - `supabase/seed/phase_c_seed.sql`: datos ficticios y pasos seguros para vincular usuarios Auth.
 - `supabase/tests/rls_isolation.sql`: plantilla de pruebas de aislamiento.

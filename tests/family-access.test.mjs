@@ -9,7 +9,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 
 test("la clave de servicio no aparece en ningun archivo que llega al navegador", () => {
   const files = [
-    "index.html", "app.js", "config.example.js",
+    "index.html", "app.js", ".env.example", "vite.config.js",
     "data/supabase-adapter.js", "data/app-config.js", "data/errors.js", "data/remote-documents.js",
     "data/remote-payments.js", "data/remote-interest.js", "data/local-adapter.js", "data/mock-data.js",
     "areas/admin.js", "areas/family.js", "areas/documents.js", "areas/payments.js", "ui/shared.js",

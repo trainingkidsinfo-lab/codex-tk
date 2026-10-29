@@ -10,22 +10,23 @@ import {
   stepLabels,
   steps,
   trainingKidsPlans,
-} from "./data/mock-data.js?v=j1";
-import { loadAppConfig } from "./data/app-config.js?v=j1";
-import { createLocalDataAdapter } from "./data/local-adapter.js?v=j1";
-import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=j1";
-import { translateDataError } from "./data/errors.js?v=j1";
-import { renderAuth, renderLoading } from "./areas/access.js?v=j1";
-import { renderAdmin } from "./areas/admin.js?v=j1";
-import { renderDesign } from "./areas/design.js?v=j1";
-import { renderDocuments } from "./areas/documents.js?v=j1";
-import { renderFamily } from "./areas/family.js?v=j1";
-import { getEnrollmentReview } from "./areas/enrollment-review.js?v=j1";
-import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=j1";
-import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=j1";
-import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=j1";
-import { renderPayments } from "./areas/payments.js?v=j1";
-import { appChrome, serviceName, toast } from "./ui/shared.js?v=j1";
+} from "./data/mock-data.js";
+import { loadAppConfig } from "./data/app-config.js";
+import { createLocalDataAdapter } from "./data/local-adapter.js";
+import { createSupabaseDataAdapter } from "./data/supabase-adapter.js";
+import { translateDataError } from "./data/errors.js";
+import { renderAuth, renderLoading } from "./areas/access.js";
+import { renderAdmin } from "./areas/admin.js";
+import { renderDesign } from "./areas/design.js";
+import { renderDocuments } from "./areas/documents.js";
+import { renderFamily } from "./areas/family.js";
+import { getEnrollmentReview } from "./areas/enrollment-review.js";
+import { createFootballAcademyEnrollment } from "./areas/football-academy.js";
+import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js";
+import { generateContractActivityPdf } from "./areas/pdf-generator.js";
+import { renderPayments } from "./areas/payments.js";
+import { inputAt, inputsAt } from "./ui/dom.js";
+import { appChrome, serviceName, toast } from "./ui/shared.js";
 
 const appConfig = loadAppConfig();
 const adapter = appConfig.isSupabaseTest
@@ -80,21 +81,10 @@ function getChild(id = getState().selectedChildId) {
   return state.family.children.find((child) => child.id === id) || state.family.children[0];
 }
 
-function addAudit(action, service = "Training Kids") {
-  adapter.mutate((state) => {
-    state.audit.unshift({
-      id: `a-${Date.now()}`,
-      date: new Date().toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" }),
-      actor: state.activeView === "admin" ? "Administracion" : "Familia",
-      action,
-      service,
-    });
-  });
-}
 
 async function login() {
-  const email = document.querySelector("#email").value.trim();
-  const code = (document.querySelector("#code")?.value || "").replace(/\s+/g, "");
+  const email = (inputAt("#email")?.value || "").trim();
+  const code = (inputAt("#code")?.value || "").replace(/\s+/g, "");
   if (!email) return toast("Introduce un correo electrónico.");
   if (appConfig.isSupabaseTest) return requestLoginLink(email);
   if (code !== TEST_CODE) return toast("Codigo de prueba incorrecto. Usa 123456.");
@@ -325,9 +315,9 @@ async function updateFootballInterest(requestId, status) {
 
 async function submitFamilyAccess() {
   if (!adapter.isRemote || !getState().session?.isAdmin) return;
-  const familyId = document.querySelector("#family-access-target")?.value || "";
-  const familyName = document.querySelector("#family-access-name")?.value.trim() || "";
-  const email = document.querySelector("#family-access-email")?.value.trim().toLowerCase() || "";
+  const familyId = inputAt("#family-access-target")?.value || "";
+  const familyName = inputAt("#family-access-name")?.value.trim() || "";
+  const email = inputAt("#family-access-email")?.value.trim().toLowerCase() || "";
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast("Revisa el correo del tutor.");
   if (!familyId && !familyName) return toast("Indica el nombre de la familia nueva.");
   try {
@@ -956,7 +946,7 @@ function markDocumentReadIfBottom(event) {
 }
 
 function prepareSignaturePad(documentId) {
-  const canvas = document.querySelector("#signaturePad");
+  const canvas = /** @type {HTMLCanvasElement | null} */ (document.querySelector("#signaturePad"));
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   ctx.fillStyle = "#ffffff";
@@ -1007,7 +997,7 @@ function clearSignaturePad(documentId) {
 }
 
 function collectDocumentFieldValues() {
-  const inputs = [...document.querySelectorAll("[data-doc-field]")];
+  const inputs = inputsAt("[data-doc-field]");
   if (!inputs.length) return null;
   const values = {};
   inputs.forEach((input) => {
@@ -1077,14 +1067,14 @@ function showSignatureValidation(message) {
 }
 
 function confirmSimulatedSignature(documentId) {
-  const signerId = document.querySelector("#docSigner")?.value;
-  const requiredField = document.querySelector("#docRequiredField")?.value.trim();
-  const consentReview = document.querySelector("#docConsentReview")?.checked;
-  const consentVersion = document.querySelector("#docConsentVersion")?.checked;
-  const consentSignature = document.querySelector("#docConsentSignature")?.checked;
-  const consentContract = document.querySelector("#docConsentContract")?.checked;
-  const consentRisk = document.querySelector("#docConsentRisk")?.checked;
-  const consentParq = document.querySelector("#docConsentParq")?.checked;
+  const signerId = inputAt("#docSigner")?.value;
+  const requiredField = inputAt("#docRequiredField")?.value.trim();
+  const consentReview = inputAt("#docConsentReview")?.checked;
+  const consentVersion = inputAt("#docConsentVersion")?.checked;
+  const consentSignature = inputAt("#docConsentSignature")?.checked;
+  const consentContract = inputAt("#docConsentContract")?.checked;
+  const consentRisk = inputAt("#docConsentRisk")?.checked;
+  const consentParq = inputAt("#docConsentParq")?.checked;
   const signatureDrawing = signatureDrafts[documentId];
   const stateBefore = getState();
   const docBefore = stateBefore.documents.find((item) => item.id === documentId);
@@ -1332,7 +1322,7 @@ function render() {
   else if (state.activeView === "admin") app.innerHTML = appChrome({ state, content: renderFamily(context) });
   else if (state.activeView === "documents") app.innerHTML = appChrome({ state, content: renderDocuments(context) });
   else if (state.activeView === "payments") app.innerHTML = appChrome({ state, content: renderPayments(context) });
-  else if (state.activeView === "design") app.innerHTML = appChrome({ state, content: renderDesign(context) });
+  else if (state.activeView === "design") app.innerHTML = appChrome({ state, content: renderDesign() });
   else app.innerHTML = appChrome({ state, content: renderFamily(context) });
   initializeDocumentReview();
 }

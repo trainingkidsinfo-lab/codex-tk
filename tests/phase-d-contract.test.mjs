@@ -8,7 +8,7 @@ const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 for (const rpc of ["family_update_details", "family_save_player", "family_submit_enrollment", "admin_review_enrollment"]) {
   assert.match(migration, new RegExp(`create or replace function public\\.${rpc}`));
   assert.match(migration, new RegExp(`grant execute on function public\\.${rpc}`));
-  assert.match(adapter, new RegExp(`rpc\\(\"${rpc}\"`));
+  assert.match(adapter, new RegExp(`rpc\\("${rpc}"`));
 }
 assert.match(migration, /security definer/g);
 assert.match(migration, /public\.current_family_id\(\)/);

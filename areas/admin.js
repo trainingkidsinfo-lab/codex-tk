@@ -1,11 +1,11 @@
-import { centerName, planName, serviceName } from "../ui/shared.js?v=j1";
-import { escapeHtml, jsArg } from "../ui/escape.js?v=j1";
-import { renderAdminDocuments } from "./documents.js?v=j1";
-import { getEnrollmentReview } from "./enrollment-review.js?v=j1";
-import { getEnrollmentOperationalSummary, getGroupOccupancy } from "./operational-status.js?v=j1";
-import { renderAdminPayments } from "./payments.js?v=j1";
+import { centerName, planName, serviceName } from "../ui/shared.js";
+import { escapeHtml, jsArg } from "../ui/escape.js";
+import { renderAdminDocuments } from "./documents.js";
+import { getEnrollmentReview } from "./enrollment-review.js";
+import { getEnrollmentOperationalSummary, getGroupOccupancy } from "./operational-status.js";
+import { renderAdminPayments } from "./payments.js";
 
-export function renderAdmin({ state, services, centers, groups, trainingKidsPlans, documentTemplates, legalDocumentSources }) {
+export function renderAdmin({ state, services, centers, groups, trainingKidsPlans, documentTemplates }) {
   const filter = state.adminServiceFilter;
   const search = String(state.adminSearch || "").trim().toLowerCase();
   const summaries = state.enrollments.map((enrollment) => getEnrollmentOperationalSummary({ enrollment, state, services, centers, groups, trainingKidsPlans }));
@@ -78,7 +78,7 @@ export function renderAdmin({ state, services, centers, groups, trainingKidsPlan
         <div class="grid two">
           ${filteredGroups.length ? filteredGroups.map((group) => renderAdminGroupCard({ group, state, services, centers })).join("") : `<div class="empty">Sin grupos en esta fase.</div>`}
         </div>
-        ${renderAdminDocuments({ state, services, documentTemplates, legalDocumentSources })}
+        ${renderAdminDocuments({ state, services, documentTemplates })}
         ${renderAdminPayments({ state, services, centers, trainingKidsPlans })}
         <section class="section-title"><h2>Auditoria basica</h2></section>
         <div class="grid">

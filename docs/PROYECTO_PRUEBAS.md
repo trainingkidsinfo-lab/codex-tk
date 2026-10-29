@@ -11,7 +11,7 @@
 | Plan | Gratuito. Se pausa tras unos dias sin uso; se reactiva con "Resume project" sin perder datos. |
 | Creado | 2026-10-28 |
 
-La app se conecta a el mediante `config.local.js`, que no esta en Git. Solo lleva la URL del proyecto y la clave publica `sb_publishable_...`. Nunca `service_role` ni contrasenas.
+La app se conecta a el mediante `.env.local` (desde la Fase K1; antes `config.local.js`), que no esta en Git. Solo lleva la URL del proyecto y la clave publica `sb_publishable_...`. Nunca `service_role` ni contrasenas.
 
 ## Por que hay un proyecto nuevo
 
