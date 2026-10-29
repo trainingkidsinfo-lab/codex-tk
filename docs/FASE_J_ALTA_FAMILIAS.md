@@ -47,4 +47,7 @@ D7, aprobada el 2026-10-29: activar la edge function `prepare-family-access` en 
   - sin cabecera de autorizacion: 401 de Supabase;
   - con la clave publica, sin usuario: 401 `authentication_required` (la funcion arranca y tiene su configuracion);
   - preflight desde `http://127.0.0.1:4181`: permitido; desde otro origen: no autorizado.
-- Pendiente: probar desde la app un alta real de prueba y la entrada del tutor.
+- Probado desde la app el 2026-10-29:
+  - Administracion dio de alta "Familia prueba J" con el tutor `trainingkids.info+tutor1@gmail.com` (alias de la cuenta de Training Kids). La funcion acepto el token de la sesion con `verify_jwt` activado, asi que no hace falta desactivarlo.
+  - El tutor pidio su enlace, entro y ve solo su familia, sin pestana Admin.
+  - Comprobado en Supabase: familia creada, usuario de Auth confirmado, miembro activo con permiso de firma y pago, rol `family` en esa familia y una entrada "Familia dada de alta" en `audit_log`.
