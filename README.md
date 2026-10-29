@@ -16,6 +16,8 @@ Fase F prepara la firma remota: RPC `family_sign_document`, subida del PDF firma
 
 Fase G prepara pagos de prueba sin Stripe: al aprobar una solicitud el servidor calcula el pago inicial con la tarifa y, una sola vez por familia, la matricula. Administracion registra pagado, fallido o cancelado con recibo de prueba. Consulta `docs/FASE_G_PAGOS.md`.
 
+Fase H lleva al servidor la activacion: solo se activa una inscripcion con solicitud aprobada, datos completos, contrato firmado, grupo con plaza y pago confirmado. Incluye asignar grupo, dar de baja y la ocupacion de grupos. Consulta `docs/FASE_H_ESTADOS.md`.
+
 ## Pruebas
 
 Con Node 20 o superior:
@@ -184,6 +186,8 @@ Archivos principales:
 - `supabase/migrations/202610280002_harden_function_grants.sql`: sin ejecucion de funciones sin sesion y sin fuga de familia por jugador. Aplicada en pruebas.
 - `supabase/migrations/202610290001_phase_g_payments.sql`: pagos de prueba de Fase G. Matricula una sola vez por familia.
 - `docs/FASE_G_PAGOS.md`: reglas, limites y verificacion de la Fase G.
+- `supabase/migrations/202610290002_phase_h_operational_status.sql`: requisitos, grupo, activacion y baja en el servidor.
+- `docs/FASE_H_ESTADOS.md`: reglas y verificacion de la Fase H.
 - `docs/FASE_F_FIRMA_REMOTA.md`: alcance, limites y pasos para aplicar la Fase F.
 - `docs/PROYECTO_PRUEBAS.md`: proyecto Supabase de pruebas actual, que se ha cargado y como se ha verificado.
 

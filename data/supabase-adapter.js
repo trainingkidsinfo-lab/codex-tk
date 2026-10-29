@@ -1,13 +1,13 @@
-import { assertSupabaseConfig } from "./app-config.js?v=g1";
-import { isUuid, translateDataError } from "./errors.js?v=g1";
+import { assertSupabaseConfig } from "./app-config.js?v=h1";
+import { isUuid, translateDataError } from "./errors.js?v=h1";
 import {
   LEGACY_SIGNATURE_COLUMNS,
   SIGNATURE_BUCKETS,
   SIGNATURE_COLUMNS,
   mapRemoteDocuments,
   signRemoteDocument,
-} from "./remote-documents.js?v=g1";
-import { LEGACY_PAYMENT_COLUMNS, PAYMENT_COLUMNS, PAYMENT_RESULTS, mapRemotePayment } from "./remote-payments.js?v=g1";
+} from "./remote-documents.js?v=h1";
+import { LEGACY_PAYMENT_COLUMNS, PAYMENT_COLUMNS, PAYMENT_RESULTS, mapRemotePayment } from "./remote-payments.js?v=h1";
 
 // Version exacta fijada (Fase E). Actualizar solo de forma deliberada y probada.
 const SUPABASE_JS_URL = "https://esm.sh/@supabase/supabase-js@2.103.0";
@@ -381,6 +381,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     const failure = results.find((result) => result.error);
     if (failure) throw failure.error;
     const [familyResult, membersResult, playersResult, enrollmentsResult, auditResult, signaturesResult, paymentsResult, documentsResult, groupsResult, locationsResult, plansResult, seasonsResult] = results;
+    const occupancy = await loadGroupOccupancy();
     const family = familyResult.data;
     const players = playersResult.data || [];
     const enrollments = enrollmentsResult.data || [];
@@ -400,6 +401,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         signatures: signaturesResult.data || [],
       }),
       remotePaymentsReady: !paymentsResult.legacy,
+      remoteOperationsReady: occupancy.ready,
       payments: (paymentsResult.data || []).map((item) => mapRemotePayment(item, enrollments)),
       audit: (auditResult.data || []).map(mapAudit),
       remoteCatalog: {
@@ -413,6 +415,7 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
           time: [group.starts_at, group.ends_at].filter(Boolean).join("-") || "Pendiente",
           capacity: group.capacity,
           occupied: group.occupied_base,
+          serverAssigned: occupancy.ready ? occupancy.assigned.get(group.id) ?? 0 : undefined,
         })),
         centers: (locationsResult.data || []).map((location) => ({
           id: location.id,
@@ -511,6 +514,14 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
     if (result.error?.code !== "42703") return result;
     const legacy = await supabase.from("signature_records").select(LEGACY_SIGNATURE_COLUMNS).eq("family_id", familyId);
     return { ...legacy, legacy: true };
+  }
+
+  // Antes de aplicar la migracion H no existe group_occupancy: se usa el recuento local
+  // y las acciones de activacion, grupo y baja quedan desactivadas.
+  async function loadGroupOccupancy() {
+    const { data, error } = await supabase.rpc("group_occupancy");
+    if (error) return { ready: false, assigned: new Map() };
+    return { ready: true, assigned: new Map((data || []).map((row) => [row.group_id, Number(row.assigned) || 0])) };
   }
 
   // Antes de aplicar la migracion G faltan columnas de pago: se lee el esquema anterior
@@ -684,6 +695,15 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
         commit();
       });
     },
+    async assignGroup(enrollmentId, groupId) {
+      return runEnrollmentOperation(`assign-group-${enrollmentId}`, "admin_assign_group", { p_enrollment_id: enrollmentId, p_group_id: groupId });
+    },
+    async activateEnrollment(enrollmentId) {
+      return runEnrollmentOperation(`activate-${enrollmentId}`, "admin_activate_enrollment", { p_enrollment_id: enrollmentId });
+    },
+    async withdrawEnrollment(enrollmentId, reason = "") {
+      return runEnrollmentOperation(`withdraw-${enrollmentId}`, "admin_withdraw_enrollment", { p_enrollment_id: enrollmentId, p_reason: reason || null });
+    },
     async getSignedFileUrl(kind, path) {
       const bucket = kind === "pdf" ? SIGNATURE_BUCKETS.pdf : SIGNATURE_BUCKETS.evidence;
       const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 120);
@@ -733,6 +753,16 @@ export async function createSupabaseDataAdapter({ initialState, config, onChange
       authSubscription?.unsubscribe();
     },
   };
+
+  async function runEnrollmentOperation(key, rpcName, params) {
+    return runOperation(key, async () => {
+      if (!state.remoteOperationsReady) throw new Error("operations_schema_missing");
+      const { error } = await supabase.rpc(rpcName, params);
+      if (error) throw error;
+      await refreshSessionAndState();
+      commit();
+    });
+  }
 
   async function runOperation(key, operation) {
     if (operationsInFlight.has(key)) return;

@@ -10,22 +10,22 @@ import {
   stepLabels,
   steps,
   trainingKidsPlans,
-} from "./data/mock-data.js?v=g1";
-import { loadAppConfig } from "./data/app-config.js?v=g1";
-import { createLocalDataAdapter } from "./data/local-adapter.js?v=g1";
-import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=g1";
-import { translateDataError } from "./data/errors.js?v=g1";
-import { renderAuth, renderLoading } from "./areas/access.js?v=g1";
-import { renderAdmin } from "./areas/admin.js?v=g1";
-import { renderDesign } from "./areas/design.js?v=g1";
-import { renderDocuments } from "./areas/documents.js?v=g1";
-import { renderFamily } from "./areas/family.js?v=g1";
-import { getEnrollmentReview } from "./areas/enrollment-review.js?v=g1";
-import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=g1";
-import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=g1";
-import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=g1";
-import { renderPayments } from "./areas/payments.js?v=g1";
-import { appChrome, serviceName, toast } from "./ui/shared.js?v=g1";
+} from "./data/mock-data.js?v=h1";
+import { loadAppConfig } from "./data/app-config.js?v=h1";
+import { createLocalDataAdapter } from "./data/local-adapter.js?v=h1";
+import { createSupabaseDataAdapter } from "./data/supabase-adapter.js?v=h1";
+import { translateDataError } from "./data/errors.js?v=h1";
+import { renderAuth, renderLoading } from "./areas/access.js?v=h1";
+import { renderAdmin } from "./areas/admin.js?v=h1";
+import { renderDesign } from "./areas/design.js?v=h1";
+import { renderDocuments } from "./areas/documents.js?v=h1";
+import { renderFamily } from "./areas/family.js?v=h1";
+import { getEnrollmentReview } from "./areas/enrollment-review.js?v=h1";
+import { createFootballAcademyEnrollment } from "./areas/football-academy.js?v=h1";
+import { getEnrollmentOperationalSummary, validateGroupAssignment } from "./areas/operational-status.js?v=h1";
+import { generateContractActivityPdf } from "./areas/pdf-generator.js?v=h1";
+import { renderPayments } from "./areas/payments.js?v=h1";
+import { appChrome, serviceName, toast } from "./ui/shared.js?v=h1";
 
 const appConfig = loadAppConfig();
 const adapter = appConfig.isSupabaseTest
@@ -452,11 +452,39 @@ function assignGroup(enrollmentId, groupId) {
   window.setTimeout(() => toast("Asignacion simulada actualizada."), 100);
 }
 
+// Catalogo vigente: el remoto en modo test, el ficticio en demo.
+function activeCatalog(state = getState()) {
+  return {
+    centers: state.remoteCatalog?.centers || centers,
+    groups: state.remoteCatalog?.groups || groups,
+    trainingKidsPlans: state.remoteCatalog?.plans || trainingKidsPlans,
+  };
+}
+
+async function saveGroupAssignment(enrollmentId) {
+  if (!adapter.isRemote) return;
+  const state = getState();
+  const enrollment = state.enrollments.find((item) => item.id === enrollmentId);
+  const groupId = state.adminGroupDrafts?.[enrollmentId] ?? enrollment?.groupId ?? "";
+  if (!enrollment) return toast("Inscripcion no encontrada.");
+  if (!groupId) return toast("Elige un grupo.");
+  if (groupId === enrollment.groupId) return toast("Ese grupo ya esta asignado.");
+  const catalog = activeCatalog(state);
+  const validation = validateGroupAssignment({ enrollment, groupId, state, centers: catalog.centers, groups: catalog.groups });
+  if (!validation.ok) return toast(validation.reason);
+  try {
+    await adapter.assignGroup(enrollmentId, groupId);
+    toast("Grupo asignado.");
+  } catch (error) {
+    toast(translateDataError(error, "No se pudo asignar el grupo."));
+  }
+}
+
 function activateEnrollment(enrollmentId) {
   const state = getState();
   const enrollment = state.enrollments.find((item) => item.id === enrollmentId);
   if (!enrollment) return toast("Inscripcion no encontrada.");
-  const summary = getEnrollmentOperationalSummary({ enrollment, state, services, centers, groups, trainingKidsPlans });
+  const summary = getEnrollmentOperationalSummary({ enrollment, state, services, ...activeCatalog(state) });
   if (summary.status !== "ready") return toast(`No se puede activar. ${summary.missing[0] || "Faltan requisitos."}`);
   adapter.mutate((currentState) => {
     currentState.pendingAdminAction = { type: "activate", enrollmentId };
@@ -524,7 +552,17 @@ function cancelAdminAction() {
   adapter.setState({ pendingAdminAction: null });
 }
 
-function applyEnrollmentActivation(enrollmentId) {
+async function applyEnrollmentActivation(enrollmentId) {
+  if (adapter.isRemote) {
+    adapter.setState({ pendingAdminAction: null });
+    try {
+      await adapter.activateEnrollment(enrollmentId);
+      toast("Inscripcion activada.");
+    } catch (error) {
+      toast(translateDataError(error, "No se pudo activar la inscripcion."));
+    }
+    return;
+  }
   const state = getState();
   const enrollment = state.enrollments.find((item) => item.id === enrollmentId);
   const summary = enrollment ? getEnrollmentOperationalSummary({ enrollment, state, services, centers, groups, trainingKidsPlans }) : null;
@@ -558,7 +596,17 @@ function withdrawEnrollment(enrollmentId) {
   });
 }
 
-function applyEnrollmentWithdrawal(enrollmentId) {
+async function applyEnrollmentWithdrawal(enrollmentId) {
+  if (adapter.isRemote) {
+    adapter.setState({ pendingAdminAction: null });
+    try {
+      await adapter.withdrawEnrollment(enrollmentId);
+      toast("Baja registrada.");
+    } catch (error) {
+      toast(translateDataError(error, "No se pudo registrar la baja."));
+    }
+    return;
+  }
   adapter.mutate((state) => {
     const currentEnrollment = state.enrollments.find((item) => item.id === enrollmentId);
     if (!currentEnrollment) return;
@@ -1248,6 +1296,7 @@ window.saveSelectedChild = saveSelectedChild;
 window.selectService = selectService;
 window.saveTrainingEnrollment = saveTrainingEnrollment;
 window.assignGroup = assignGroup;
+window.saveGroupAssignment = saveGroupAssignment;
 window.reviewEnrollment = reviewEnrollment;
 window.approveEnrollment = approveEnrollment;
 window.requestEnrollmentChanges = requestEnrollmentChanges;

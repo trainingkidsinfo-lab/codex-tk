@@ -1,9 +1,9 @@
-import { centerName, planName, serviceName } from "../ui/shared.js?v=g1";
-import { escapeHtml, jsArg } from "../ui/escape.js?v=g1";
-import { renderAdminDocuments } from "./documents.js?v=g1";
-import { getEnrollmentReview } from "./enrollment-review.js?v=g1";
-import { getEnrollmentOperationalSummary, getGroupOccupancy } from "./operational-status.js?v=g1";
-import { renderAdminPayments } from "./payments.js?v=g1";
+import { centerName, planName, serviceName } from "../ui/shared.js?v=h1";
+import { escapeHtml, jsArg } from "../ui/escape.js?v=h1";
+import { renderAdminDocuments } from "./documents.js?v=h1";
+import { getEnrollmentReview } from "./enrollment-review.js?v=h1";
+import { getEnrollmentOperationalSummary, getGroupOccupancy } from "./operational-status.js?v=h1";
+import { renderAdminPayments } from "./payments.js?v=h1";
 
 export function renderAdmin({ state, services, centers, groups, trainingKidsPlans, documentTemplates, legalDocumentSources }) {
   const filter = state.adminServiceFilter;
@@ -145,13 +145,14 @@ function renderEnrollmentAdmin({ summary, enrollment, state, services, centers, 
             <button type="button" class="button ghost" data-review-decision="request_changes" onclick="requestEnrollmentChanges(${enrollmentId})" ${saving || pendingAction ? "disabled" : ""}>Solicitar cambios</button>
             <button type="button" class="button ghost" data-review-decision="reject" onclick="rejectEnrollment(${enrollmentId})" ${saving || pendingAction ? "disabled" : ""}>Rechazar</button>
           ` : ""}
+          ${state.appMode === "test" ? renderRemoteOperationButtons({ enrollment, summary, state, saving, pendingAction }) : ""}
           ${state.appMode === "demo" ? `
             <button type="button" class="button ghost" data-review-decision="request_changes" onclick="requestEnrollmentChanges(${enrollmentId})" ${pendingAction ? "disabled" : ""}>Solicitar cambios</button>
             <button type="button" class="button" ${summary.status === "ready" && !pendingAction ? "" : "disabled"} onclick="activateEnrollment(${enrollmentId})">Activar</button>
             <button type="button" class="button ghost" ${summary.status === "active" && !pendingAction ? "" : "disabled"} onclick="withdrawEnrollment(${enrollmentId})">Dar de baja</button>
           ` : ""}
         </div>
-        ${pendingAction ? renderAdminConfirmation(pendingAction, saving) : ""}
+        ${pendingAction ? renderAdminConfirmation(pendingAction, saving, state.appMode) : ""}
       ` : `
         <button type="button" class="button yellow" onclick="markFootballInterest(${enrollmentId})">Marcar contacto</button>
       `}
@@ -159,15 +160,35 @@ function renderEnrollmentAdmin({ summary, enrollment, state, services, centers, 
   `;
 }
 
-function renderAdminConfirmation(action, saving) {
+function renderRemoteOperationButtons({ enrollment, summary, state, saving, pendingAction }) {
+  if (enrollment.reviewStatus !== "approved" || enrollment.operationalStatus === "withdrawn") return "";
+  if (!state.remoteOperationsReady) {
+    return `<p class="muted">Activar, asignar grupo y dar de baja estaran disponibles cuando se aplique la migracion de la Fase H.</p>`;
+  }
+  const id = jsArg(enrollment.id);
+  const draft = state.adminGroupDrafts?.[enrollment.id];
+  const groupChanged = Boolean(draft) && draft !== enrollment.groupId;
+  const busy = saving || pendingAction;
+  return `
+    <button type="button" class="button ghost" data-operation="assign-group" onclick="saveGroupAssignment(${id})" ${busy || !groupChanged ? "disabled" : ""}>Guardar grupo</button>
+    <button type="button" class="button" data-operation="activate" onclick="activateEnrollment(${id})" ${busy || summary.status !== "ready" ? "disabled" : ""}>Activar</button>
+    <button type="button" class="button ghost" data-operation="withdraw" onclick="withdrawEnrollment(${id})" ${busy ? "disabled" : ""}>Dar de baja</button>
+  `;
+}
+
+function renderAdminConfirmation(action, saving, appMode = "demo") {
   let text;
   if (action.type === "review") {
     const review = getEnrollmentReview(action.decision);
     text = `${review.confirmation} ${review.detail}`;
   } else if (action.type === "activate") {
-    text = "Confirmar activacion simulada. No cambia pagos ni envia comunicaciones.";
+    text = appMode === "test"
+      ? "Confirmar la activacion. El servidor comprobara de nuevo solicitud, datos, contrato, grupo y pago."
+      : "Confirmar activacion simulada. No cambia pagos ni envia comunicaciones.";
   } else {
-    text = "Confirmar baja local. No cancela pagos ni suscripciones.";
+    text = appMode === "test"
+      ? "Confirmar la baja. Se cancelan los pagos pendientes; los pagados se conservan."
+      : "Confirmar baja local. No cancela pagos ni suscripciones.";
   }
   return `
     <div class="admin-confirmation" role="alertdialog" aria-live="assertive">

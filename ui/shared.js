@@ -1,4 +1,4 @@
-import { escapeHtml } from "./escape.js?v=g1";
+import { escapeHtml } from "./escape.js?v=h1";
 
 export function appChrome({ state, content }) {
   const canSeeAdmin = state.appMode === "demo" || state.session?.isAdmin;
