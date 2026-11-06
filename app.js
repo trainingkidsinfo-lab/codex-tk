@@ -11,10 +11,10 @@ import {
   steps,
   trainingKidsPlans,
 } from "./data/mock-data.js";
-import { loadAppConfig } from "./data/app-config.js";
+import { loadAppConfig } from "./data/app-config.ts";
 import { createLocalDataAdapter } from "./data/local-adapter.js";
-import { createSupabaseDataAdapter } from "./data/supabase-adapter.js";
-import { translateDataError } from "./data/errors.js";
+import { createSupabaseDataAdapter } from "./data/supabase-adapter.ts";
+import { translateDataError } from "./data/errors.ts";
 import { renderAuth, renderLoading } from "./areas/access.js";
 import { renderAdmin } from "./areas/admin.js";
 import { renderDesign } from "./areas/design.js";

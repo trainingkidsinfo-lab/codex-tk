@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { getEnrollmentOperationalSummary, getGroupOccupancy, validateGroupAssignment } from "../areas/operational-status.js";
 import { renderAdmin } from "../areas/admin.js";
-import { translateDataError } from "../data/errors.js";
+import { translateDataError } from "../data/errors.ts";
 import { centers, documentTemplates, groups, initialState, legalDocumentSources, services, trainingKidsPlans } from "../data/mock-data.js";
 
 const GROUP = { id: "g1", service: "training_kids", centerId: "c1", name: "Grupo", day: "Lunes", time: "17:30", capacity: 8, occupied: 2, serverAssigned: 5 };
@@ -90,7 +90,7 @@ test("la app usa las operaciones del servidor en modo test", () => {
   assert.match(app, /await adapter\.activateEnrollment\(enrollmentId\)/);
   assert.match(app, /await adapter\.withdrawEnrollment\(enrollmentId\)/);
   assert.match(app, /await adapter\.assignGroup\(enrollmentId, groupId\)/);
-  const adapter = readFileSync(new URL("../data/supabase-adapter.js", import.meta.url), "utf8");
+  const adapter = readFileSync(new URL("../data/supabase-adapter.ts", import.meta.url), "utf8");
   assert.match(adapter, /supabase\.rpc\("group_occupancy"\)/);
   assert.doesNotMatch(adapter, /from\("enrollments"\)\.(insert|update|upsert)/);
 });

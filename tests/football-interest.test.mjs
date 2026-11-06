@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { isMissingRelation, mapInterestToEnrollment } from "../data/remote-interest.js";
+import { isMissingRelation, mapInterestToEnrollment } from "../data/remote-interest.ts";
 import { renderAdmin } from "../areas/admin.js";
 import { renderFamily } from "../areas/family.js";
 import { centers, documentTemplates, groups, initialState, legalDocumentSources, services, stepLabels, steps, trainingKidsPlans } from "../data/mock-data.js";
@@ -83,7 +83,7 @@ test("la app registra la prealta en el servidor en modo test", () => {
   const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
   assert.match(app, /if \(serviceId === "football_academy" && adapter\.isRemote\) \{\s+registerFootballInterest\(\);/);
   assert.match(app, /if \(adapter\.isRemote\) return updateFootballInterest\(enrollmentId, "contacted"\);/);
-  const adapter = readFileSync(new URL("../data/supabase-adapter.js", import.meta.url), "utf8");
-  assert.match(adapter, /supabase\.rpc\("family_register_interest"/);
+  const adapter = readFileSync(new URL("../data/supabase-adapter.ts", import.meta.url), "utf8");
+  assert.match(adapter, /rpc\("family_register_interest"/);
   assert.doesNotMatch(adapter, /from\("service_interest_requests"\)\.(insert|update|upsert)/);
 });

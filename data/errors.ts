@@ -1,5 +1,20 @@
-/** @type {Array<[RegExp, string | ((match: RegExpMatchArray | null) => string)]>} */
-const ERROR_MESSAGES = [
+// Forma comun de los errores de Supabase (PostgREST, Auth, Storage y Functions) y de los propios.
+export interface ErrorLike {
+  name?: string;
+  code?: string;
+  status?: number;
+  message?: string;
+  details?: string | null;
+  hint?: string | null;
+}
+
+export function asErrorLike(error: unknown): ErrorLike {
+  return error && typeof error === "object" ? (error as ErrorLike) : {};
+}
+
+type ErrorMessage = string | ((match: RegExpMatchArray) => string);
+
+const ERROR_MESSAGES: Array<[RegExp, ErrorMessage]> = [
   [/family_access_denied|row-level security/i, "No tienes permiso para acceder a esta familia."],
   [/player_access_denied/i, "No tienes permiso para modificar este hijo."],
   [/family_name_required/i, "Indica el nombre de la familia."],
@@ -51,14 +66,15 @@ const ERROR_MESSAGES = [
   [/failed to fetch|network/i, "No se pudo conectar. Comprueba tu conexión y vuelve a intentarlo."],
 ];
 
-export function translateDataError(error, fallback = "No se pudo guardar el cambio. Vuelve a intentarlo.") {
-  const technical = String(error?.message || error || "");
+export function translateDataError(error: unknown, fallback = "No se pudo guardar el cambio. Vuelve a intentarlo."): string {
+  const technical = String(asErrorLike(error).message || error || "");
   const entry = ERROR_MESSAGES.find(([pattern]) => pattern.test(technical));
   if (!entry) return fallback;
   const [pattern, message] = entry;
-  return typeof message === "function" ? message(technical.match(pattern)) : message;
+  const match = technical.match(pattern);
+  return typeof message === "function" && match ? message(match) : String(message);
 }
 
-export function isUuid(value) {
+export function isUuid(value: unknown): value is string {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
 }

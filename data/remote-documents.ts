@@ -1,7 +1,30 @@
 // Documentos y firma remota (Fase F). Sin dependencias de navegador salvo Web Crypto y Blob,
 // disponibles tambien en Node 20, para poder probarlo con un cliente Supabase simulado.
 
-export const TEMPLATE_BY_CODE = {
+import type { Json, Tables } from "./database.types.ts";
+import { callRpc, type TkSupabaseClient } from "./supabase-client.ts";
+
+type SignatureRecord = Tables<"signature_records">;
+
+// Antes de la migracion F solo existen las columnas antiguas: las de evidencia pueden faltar.
+export type SignatureRow = Pick<SignatureRecord, "id" | "player_id" | "enrollment_id" | "document_version_id" | "status" | "signed_at" | "completed_data" | "accepted_consents" | "final_sha256" | "locked_at">
+  & Partial<Pick<SignatureRecord, "final_storage_path" | "signer_name" | "evidence_storage_path" | "evidence_sha256" | "image_decision">>;
+
+export type ServiceDocumentRow = Pick<Tables<"service_documents">, "id" | "service_id" | "code" | "title" | "scope" | "required" | "active"> & {
+  document_versions: Array<Pick<Tables<"document_versions">, "id" | "version" | "effective_date" | "storage_path" | "status">> | null;
+};
+
+export type DocumentEnrollmentRow = Pick<Tables<"enrollments">, "id" | "player_id" | "service_id">;
+
+// Documento de la app que se va a firmar: solo se usan estos campos.
+export interface SignableDocument {
+  id?: string;
+  templateId: string;
+  enrollmentId: string;
+  remoteVersionId: string;
+}
+
+export const TEMPLATE_BY_CODE: Record<string, string> = {
   activity_contract: "tk-service-terms",
   image_authorization: "tk-image-rights",
   rules_and_guarantees: "tk-norms-guarantees",
@@ -20,19 +43,19 @@ const BASE_CONSENTS = ["lectura_completa", "version_aceptada", "firma_simulada"]
 const CONTRACT_CONSENTS = ["contrato_actividad", "anexo_1_riesgos", "anexo_2_parq"];
 const ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function remoteConsentsFor(templateId) {
+export function remoteConsentsFor(templateId: string): Record<string, boolean> {
   const keys = templateId === "tk-service-terms" ? [...BASE_CONSENTS, ...CONTRACT_CONSENTS] : BASE_CONSENTS;
   return Object.fromEntries(keys.map((key) => [key, true]));
 }
 
-export function signatureFolder({ familyId, enrollmentId, versionId }) {
-  for (const [label, value] of [["familia", familyId], ["inscripcion", enrollmentId], ["version", versionId]]) {
+export function signatureFolder({ familyId, enrollmentId, versionId }: { familyId: string; enrollmentId: string; versionId: string }): string {
+  for (const [label, value] of [["familia", familyId], ["inscripcion", enrollmentId], ["version", versionId]] as const) {
     if (!ID_PATTERN.test(String(value || ""))) throw new Error(`Identificador de ${label} no valido para la firma.`);
   }
   return `families/${familyId}/enrollments/${enrollmentId}/${versionId}`;
 }
 
-export function dataUrlToBytes(dataUrl, mime) {
+export function dataUrlToBytes(dataUrl: unknown, mime: string): Uint8Array<ArrayBuffer> {
   const prefix = `data:${mime};base64,`;
   if (typeof dataUrl !== "string" || !dataUrl.startsWith(prefix)) {
     throw new Error(`Se esperaba un archivo ${mime}.`);
@@ -43,12 +66,12 @@ export function dataUrlToBytes(dataUrl, mime) {
   return bytes;
 }
 
-export async function sha256Hex(bytes) {
+export async function sha256Hex(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function uploadOnce(supabase, bucket, path, bytes, contentType) {
+async function uploadOnce(supabase: TkSupabaseClient, bucket: string, path: string, bytes: Uint8Array<ArrayBuffer>, contentType: string): Promise<void> {
   const { error } = await supabase.storage.from(bucket).upload(path, new Blob([bytes], { type: contentType }), {
     contentType,
     upsert: false,
@@ -67,6 +90,15 @@ export async function signRemoteDocument({
   signaturePngDataUrl,
   pdfDataUrl = "",
   randomId = () => crypto.randomUUID(),
+}: {
+  supabase: TkSupabaseClient;
+  familyId: string;
+  document: SignableDocument;
+  signerName: string;
+  completedData: Json;
+  signaturePngDataUrl: string;
+  pdfDataUrl?: string;
+  randomId?: () => string;
 }) {
   if (!document?.enrollmentId || !document?.remoteVersionId) throw new Error("Documento remoto incompleto.");
   const folder = signatureFolder({ familyId, enrollmentId: document.enrollmentId, versionId: document.remoteVersionId });
@@ -76,9 +108,9 @@ export async function signRemoteDocument({
   const evidenceSha256 = await sha256Hex(evidenceBytes);
   const evidencePath = `${folder}/${fileId}-firma.png`;
 
-  let pdfBytes = null;
-  let pdfSha256 = null;
-  let pdfPath = null;
+  let pdfBytes: Uint8Array<ArrayBuffer> | null = null;
+  let pdfSha256: string | null = null;
+  let pdfPath: string | null = null;
   if (pdfDataUrl) {
     pdfBytes = dataUrlToBytes(pdfDataUrl, "application/pdf");
     pdfSha256 = await sha256Hex(pdfBytes);
@@ -86,9 +118,9 @@ export async function signRemoteDocument({
   }
 
   await uploadOnce(supabase, SIGNATURE_BUCKETS.evidence, evidencePath, evidenceBytes, "image/png");
-  if (pdfBytes) await uploadOnce(supabase, SIGNATURE_BUCKETS.pdf, pdfPath, pdfBytes, "application/pdf");
+  if (pdfBytes && pdfPath) await uploadOnce(supabase, SIGNATURE_BUCKETS.pdf, pdfPath, pdfBytes, "application/pdf");
 
-  const { data, error } = await supabase.rpc("family_sign_document", {
+  const { data, error } = await callRpc(supabase, "family_sign_document", {
     p_enrollment_id: document.enrollmentId,
     p_document_version_id: document.remoteVersionId,
     p_signer_name: signerName,
@@ -103,8 +135,13 @@ export async function signRemoteDocument({
   return { signatureId: data, evidencePath, evidenceSha256, pdfPath, pdfSha256 };
 }
 
-export function mapRemoteDocuments({ familyId, enrollments, serviceDocuments, signatures }) {
-  const documents = [];
+export function mapRemoteDocuments({ familyId, enrollments, serviceDocuments, signatures }: {
+  familyId: string;
+  enrollments: DocumentEnrollmentRow[];
+  serviceDocuments: ServiceDocumentRow[];
+  signatures: SignatureRow[];
+}) {
+  const documents: RemoteDocument[] = [];
   for (const definition of serviceDocuments) {
     const templateId = TEMPLATE_BY_CODE[definition.code];
     if (!templateId) continue;
@@ -112,7 +149,7 @@ export function mapRemoteDocuments({ familyId, enrollments, serviceDocuments, si
     const version = [...versions].sort((a, b) => String(b.effective_date).localeCompare(String(a.effective_date)))[0];
     if (!version) continue;
     if (definition.scope === "informative") {
-      documents.push(mapRemoteDocument({ definition, version, templateId, familyId, enrollment: undefined, signature: undefined }));
+      documents.push(mapRemoteDocument({ definition, version, templateId, familyId }));
       continue;
     }
     for (const enrollment of enrollments.filter((item) => item.service_id === definition.service_id)) {
@@ -124,8 +161,15 @@ export function mapRemoteDocuments({ familyId, enrollments, serviceDocuments, si
   return documents;
 }
 
-function mapRemoteDocument({ definition, version, templateId, familyId, enrollment, signature }) {
-  const signed = signature?.status === "signed";
+function mapRemoteDocument({ definition, version, templateId, familyId, enrollment, signature }: {
+  definition: ServiceDocumentRow;
+  version: NonNullable<ServiceDocumentRow["document_versions"]>[number];
+  templateId: string;
+  familyId: string;
+  enrollment?: DocumentEnrollmentRow;
+  signature?: SignatureRow;
+}) {
+  const signed = signature?.status === "signed" ? signature : null;
   const informative = definition.scope === "informative";
   return {
     // Identificador estable: no cambia al firmar, para no perder el documento abierto.
@@ -143,26 +187,28 @@ function mapRemoteDocument({ definition, version, templateId, familyId, enrollme
     title: definition.title,
     version: version.version,
     effectiveDate: version.effective_date,
-    signedAt: signed ? signature.signed_at || "" : "",
+    signedAt: signed ? signed.signed_at || "" : "",
     completedSnapshot: signed ? {
       version: version.version,
       effectiveDate: version.effective_date,
-      fieldValues: signature.completed_data || {},
-      lockedAt: signature.locked_at || signature.signed_at || "",
+      fieldValues: signed.completed_data || {},
+      lockedAt: signed.locked_at || signed.signed_at || "",
     } : null,
     evidence: signed ? {
-      id: signature.id,
+      id: signed.id,
       remote: true,
       version: version.version,
-      signerTutorName: signature.signer_name || "Tutor de la familia",
-      signatureName: signature.signer_name || "",
-      hash: signature.final_sha256 || signature.evidence_sha256 || "Huella remota pendiente",
+      signerTutorName: signed.signer_name || "Tutor de la familia",
+      signatureName: signed.signer_name || "",
+      hash: signed.final_sha256 || signed.evidence_sha256 || "Huella remota pendiente",
       status: "Firmado",
-      signedAt: signature.signed_at,
-      consents: signature.accepted_consents || {},
-      imageDecision: signature.image_decision || "",
-      finalStoragePath: signature.final_storage_path || "",
-      evidenceStoragePath: signature.evidence_storage_path || "",
+      signedAt: signed.signed_at,
+      consents: signed.accepted_consents || {},
+      imageDecision: signed.image_decision || "",
+      finalStoragePath: signed.final_storage_path || "",
+      evidenceStoragePath: signed.evidence_storage_path || "",
     } : null,
   };
 }
+
+export type RemoteDocument = ReturnType<typeof mapRemoteDocument>;

@@ -1,8 +1,16 @@
 // Prealtas de servicios en lanzamiento (Fase I). Sin dependencias de navegador.
 
+import type { Tables } from "./database.types.ts";
+import { asErrorLike } from "./errors.ts";
+
+export type InterestRow = Pick<
+  Tables<"service_interest_requests">,
+  "id" | "family_id" | "player_id" | "service_id" | "status" | "notes" | "admin_notes" | "contacted_at" | "closed_at" | "created_at"
+>;
+
 export const INTEREST_COLUMNS = "id,family_id,player_id,service_id,status,notes,admin_notes,contacted_at,closed_at,created_at";
 
-export const INTEREST_STATUS_LABELS = {
+export const INTEREST_STATUS_LABELS: Record<string, string> = {
   received: "Prealta recibida",
   contacted: "Familia contactada",
   closed: "Prealta cerrada",
@@ -10,7 +18,7 @@ export const INTEREST_STATUS_LABELS = {
 
 // Se presenta como una tarjeta mas del hijo, igual que en el modo demo, pero marcada como prealta
 // para que nunca entre en documentos, pagos ni activacion.
-export function mapInterestToEnrollment(row) {
+export function mapInterestToEnrollment(row: InterestRow) {
   return {
     id: row.id,
     familyId: row.family_id,
@@ -32,6 +40,6 @@ export function mapInterestToEnrollment(row) {
   };
 }
 
-export function isMissingRelation(error) {
-  return ["42P01", "PGRST205", "PGRST200"].includes(error?.code);
+export function isMissingRelation(error: unknown): boolean {
+  return ["42P01", "PGRST205", "PGRST200"].includes(asErrorLike(error).code || "");
 }

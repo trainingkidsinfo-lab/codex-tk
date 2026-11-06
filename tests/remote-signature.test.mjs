@@ -8,7 +8,7 @@ import {
   sha256Hex,
   signRemoteDocument,
   signatureFolder,
-} from "../data/remote-documents.js";
+} from "../data/remote-documents.ts";
 import {
   centers,
   documentTemplates,
@@ -179,7 +179,7 @@ test("la app usa la RPC remota y no simula la firma en modo test", () => {
   const app = readFileSync(new URL("../app.js", import.meta.url), "utf8");
   assert.match(app, /if \(adapter\.isRemote\) \{\s+try \{\s+await adapter\.signDocument\(/);
   assert.match(app, /remoteSignatureReady/);
-  const adapter = readFileSync(new URL("../data/supabase-adapter.js", import.meta.url), "utf8");
+  const adapter = readFileSync(new URL("../data/supabase-adapter.ts", import.meta.url), "utf8");
   assert.doesNotMatch(adapter, /from\("signature_records"\)\.insert/);
   assert.match(adapter, /result\.error\?\.code !== "42703"/);
 });

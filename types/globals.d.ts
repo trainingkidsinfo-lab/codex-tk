@@ -13,5 +13,6 @@ interface Window {
    * Las pantallas llaman a las acciones desde onclick="..." y app.js las publica en window.
    * Se retirara al ordenar app.js (etapa 3 de K1).
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [action: string]: any;
 }

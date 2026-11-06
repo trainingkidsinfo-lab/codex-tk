@@ -24,6 +24,8 @@ Fase J permite dar de alta familias y tutores desde el panel mediante la edge fu
 
 Fase K1 (etapa 1) incorpora herramientas sin cambiar pantallas: Vite para abrir y compilar la app, comprobacion de tipos con TypeScript sobre el JavaScript actual, revisor de codigo ESLint y comprobaciones automaticas en GitHub. Consulta `docs/FASE_K1_HERRAMIENTAS.md`.
 
+Fase K1 (etapa 2) pasa a TypeScript estricto la conexion con Supabase, con los tipos generados del esquema. Consulta `docs/FASE_K1_DATOS_TS.md`.
+
 ## Pruebas
 
 Con Node 22.12 o superior, despues de `npm install`:
@@ -82,9 +84,14 @@ tk-platform-v1/
   data/
     mock-data.js
     local-adapter.js
-    supabase-adapter.js
-    remote-documents.js
-    app-config.js
+    database.types.ts
+    supabase-client.ts
+    supabase-adapter.ts
+    remote-documents.ts
+    remote-payments.ts
+    remote-interest.ts
+    errors.ts
+    app-config.ts
   supabase/
     migrations/
     seed/
@@ -127,7 +134,7 @@ tk-platform-v1/
 - `areas/gym-home.js`: modulo futuro, sin contratacion ni reservas en esta fase.
 - `areas/documents.js`: area documental y firma simulada preparada para adaptador real.
 - `ui/shared.js`: piezas comunes reutilizables como cabecera, nombres, tarjetas de grupo y avisos.
-- `data/remote-documents.js`: firma remota (subida de archivos, huellas y RPC) y mapeo de documentos de Supabase.
+- `data/remote-documents.ts`: firma remota (subida de archivos, huellas y RPC) y mapeo de documentos de Supabase.
 - `ui/escape.js`: escapado obligatorio para cualquier dato insertado en plantillas HTML (`escapeHtml`) o en manejadores inline (`jsArg`).
 
 ## Conectado en modo test
@@ -186,8 +193,8 @@ La autorizacion de imagen queda como documento independiente con decision explic
 
 Archivos principales:
 
-- `data/supabase-adapter.js`: adaptador test compatible con la app actual. No usa `localStorage` como fallback silencioso.
-- `data/app-config.js`: seleccion explicita `demo` o `test`.
+- `data/supabase-adapter.ts`: adaptador test compatible con la app actual. No usa `localStorage` como fallback silencioso.
+- `data/app-config.ts`: seleccion explicita `demo` o `test`.
 - `.env.example`: plantilla sin secretos.
 - `supabase/migrations/202609160001_phase_c_base.sql`: tablas, indices, RLS y buckets privados.
 - `supabase/seed/phase_c_seed.sql`: datos ficticios y pasos seguros para vincular usuarios Auth.
