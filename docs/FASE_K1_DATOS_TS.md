@@ -35,4 +35,4 @@ npx supabase gen types typescript --project-id yqvymjryecmfsoilkxgj > data/datab
 
 - `npm run check`: revisor limpio, las dos pasadas de tipos sin errores, 66 de 66 pruebas y compilacion correcta.
 - Con Vite: el modo test arranca y conecta con el proyecto de pruebas; en el modo demo se recorrieron Familia, Pagos, Documentos y Admin sin errores en consola.
-- Pendiente: entrar con una sesion real de administracion y de familia, ya con `npm run dev` en `127.0.0.1:4181`, y comprobar que se cargan los datos.
+- Con sesion real, ya con `npm run dev` en `127.0.0.1:4181` (el servidor de Python se retiro), el propietario confirmo que se cargan los datos de administracion y de familia.
